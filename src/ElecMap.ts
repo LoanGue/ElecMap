@@ -10,6 +10,16 @@ import { acAnalysis, acSweep } from "./analysis/ac";
 import type { AcExcitation, AcSweep, AcSweepOptions } from "./analysis/ac";
 import type { AcSolution, DcSolution } from "./analysis/solution";
 import { transferFunction } from "./analysis/transfer";
+import {
+  equivalentCapacitance,
+  equivalentInductance,
+  equivalentResistance,
+  impedance,
+  inputImpedance,
+  theveninAc,
+  theveninDc,
+} from "./analysis/equivalent";
+import type { AcEquivalent, DcEquivalent, EquivalentOptions } from "./analysis/equivalent";
 import type { OutputSpec, TransferFunction, TransferOptions } from "./analysis/transfer";
 
 /** Analysis point for {@link ElecMap.voltage} / {@link ElecMap.current}. */
@@ -196,13 +206,100 @@ export class ElecMap {
     return transferFunction(this.system, options);
   }
 
-  /** DC power absorbed by each component (W); sources delivering power are negative. */
-  power(): Record<string, number> {
-    const op = this.operatingPoint();
-    const out: Record<string, number> = {};
-    for (const c of this.compiled.components) if (c.type !== "coupling") out[c.id] = op.power(c.id);
-    return out;
+  // ------------------------------------------------------------- equivalents
+
+  /**
+   * Impedance `Z(s)` between two nodes (`b` defaults to ground), all independent
+   * sources off. It is a {@link TransferFunction}: `Z.evaluate(freq)`, `Z.toLatex()`…
+   */
+  impedance(a: NodeName, b?: NodeName): TransferFunction {
+    return impedance(this.system, a, b);
   }
+
+  /** Complex impedance (Ω) between two nodes at a frequency (Hz). */
+  equivalentImpedance(a: NodeName, b: NodeName | undefined, freq: number): Complex {
+    return this.impedance(a, b).evaluate(freq);
+  }
+
+  /**
+   * Equivalent resistance (Ω) between two nodes.
+   * @throws {@link ElecMapError} `NOT_HOMOGENEOUS` if the network is reactive (see {@link EquivalentOptions})
+   */
+  equivalentResistance(a: NodeName, b?: NodeName, options?: EquivalentOptions): number {
+    return equivalentResistance(this.impedance(a, b), options);
+  }
+
+  /** Equivalent capacitance (F) between two nodes, for purely capacitive networks. */
+  equivalentCapacitance(a: NodeName, b?: NodeName, options?: EquivalentOptions): number {
+    return equivalentCapacitance(this.impedance(a, b), options);
+  }
+
+  /** Equivalent inductance (H) between two nodes, for purely inductive networks. */
+  equivalentInductance(a: NodeName, b?: NodeName, options?: EquivalentOptions): number {
+    return equivalentInductance(this.impedance(a, b), options);
+  }
+
+  /** Impedance `Z(s)` seen by an independent source (voltage / delivered current). */
+  inputImpedance(source?: string): TransferFunction {
+    return inputImpedance(this.system, source ?? resolveSingleSource(this.compiled));
+  }
+
+  /** Output impedance `Z(s)` at a node (alias of {@link impedance} to ground). */
+  outputImpedance(node: NodeName, reference?: NodeName): TransferFunction {
+    return this.impedance(node, reference);
+  }
+
+  /** Thévenin / Norton equivalent seen between two nodes (DC by default, or at `{ freq }`). */
+  thevenin(a: NodeName, b?: NodeName, at?: "dc"): DcEquivalent;
+  thevenin(a: NodeName, b: NodeName | undefined, at: { freq: number }): AcEquivalent;
+  thevenin(
+    a: NodeName,
+    b?: NodeName,
+    at: "dc" | { freq: number } = "dc",
+  ): DcEquivalent | AcEquivalent {
+    return at === "dc" ? theveninDc(this.system, a, b) : theveninAc(this.system, at.freq, a, b);
+  }
+
+  /** Same as {@link thevenin}; the Norton current and impedance are part of the result. */
+  norton(a: NodeName, b?: NodeName, at?: "dc"): DcEquivalent;
+  norton(a: NodeName, b: NodeName | undefined, at: { freq: number }): AcEquivalent;
+  norton(
+    a: NodeName,
+    b?: NodeName,
+    at: "dc" | { freq: number } = "dc",
+  ): DcEquivalent | AcEquivalent {
+    return at === "dc" ? theveninDc(this.system, a, b) : theveninAc(this.system, at.freq, a, b);
+  }
+
+  // ------------------------------------------------------------------- power
+
+  /**
+   * Power absorbed by each component. DC (default): watts, sources delivering power
+   * are negative. `{ freq }`: complex power `S = ½·V·I*` (W + j·var) for the AC sources.
+   */
+  power(at?: "dc"): Record<string, number>;
+  power(at: { freq: number } & AcExcitation): Record<string, Complex>;
+  power(at: AnalysisPoint = "dc"): Record<string, number> | Record<string, Complex> {
+    const ids = this.compiled.components.filter((c) => c.type !== "coupling").map((c) => c.id);
+    if (at === "dc") {
+      const op = this.operatingPoint();
+      return Object.fromEntries(ids.map((id) => [id, op.power(id)]));
+    }
+    const { freq, ...excitation } = at;
+    const sol = this.ac(freq, excitation);
+    return Object.fromEntries(ids.map((id) => [id, sol.power(id)]));
+  }
+}
+
+function resolveSingleSource(circuit: CompiledCircuit): string {
+  const sources = circuit.components.filter((c) => c.type === "vsource" || c.type === "isource");
+  if (sources.length !== 1) {
+    throw new ElecMapError(
+      "INVALID_ARGUMENT",
+      `Pass the source id (${sources.length} independent sources)`,
+    );
+  }
+  return (sources[0] as ComponentJSON).id;
 }
 
 function defaultField(c: ComponentJSON): string {

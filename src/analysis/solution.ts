@@ -84,6 +84,18 @@ export class AcSolution {
     return this.system.evaluate(this.system.currentForm(id), this.x, this.s, this.values);
   }
 
+  /**
+   * Complex power absorbed by a component, `S = ½·V·I*` (peak phasors): `re` is the
+   * average (active) power in W, `im` the reactive power in var. Sources delivering
+   * power have a negative real part.
+   */
+  power(id: string): Complex {
+    const c = this.system.circuit.component(id);
+    if (c.type === "coupling") return Complex.ZERO;
+    const v = c.type === "opamp" ? this.voltage(c.nodes[2]) : this.voltage(c.nodes[0], c.nodes[1]);
+    return v.mul(this.current(id).conj()).mul(0.5);
+  }
+
   /** Every node voltage phasor referenced to ground. */
   nodeVoltages(): Record<NodeName, Complex> {
     const out: Record<NodeName, Complex> = { [this.system.circuit.ground]: Complex.ZERO };

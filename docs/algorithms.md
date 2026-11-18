@@ -49,3 +49,11 @@ Expanding a polynomial determinant directly loses accuracy in floating point whe
 5. normalises the denominator to `1 + a₁s + …`.
 
 Poles and zeros come from the Aberth–Ehrlich solver. Cutoff frequencies are found by bisection in log-frequency on `|H| = ref/√2`, the peak by golden-section search.
+
+## Equivalent impedances
+
+`Z(s)` between `a` and `b` reuses the transfer-function machinery: the independent sources are zeroed (voltage sources become shorts, current sources opens, exactly what their MNA stamps do with a zero value), a 1 A test current is injected into `a` and drawn from `b`, and `V(a) − V(b)` is the output.
+
+- **R / L / C equivalents** check the shape of `Z(s)`: constant (R), `1/(C·s)` (C), `L·s` (L); otherwise `NOT_HOMOGENEOUS` is thrown, unless `mode: "dc"` (Z(0)) or `mode: "freq"` (value of the equivalent component at one frequency) is requested.
+- **Thévenin:** `Vth` is the open-circuit voltage (DC operating point or AC phasor), `Zth = Z(a, b)`; Norton follows as `In = Vth / Zth`. Maximum power transfer uses `R = Rth` (DC) or the conjugate match `Z = Zth*` (AC, `P = |Vth|² / 8·Re Zth` for peak phasors).
+- **Input impedance** of a voltage source is `−V / I(V)` (SPICE current convention), of a current source the impedance between its terminals.

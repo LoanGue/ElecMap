@@ -19,6 +19,8 @@ export type ElecMapErrorCode =
   | "PARSE_ERROR"
   /** The circuit is structurally invalid (see `details.issues`). */
   | "INVALID_CIRCUIT"
+  /** An equivalent R, L or C was requested for a network that is not purely of that kind. */
+  | "NOT_HOMOGENEOUS"
   /** A referenced component or node does not exist. */
   | "NOT_FOUND"
   /** The feature is not supported (yet). */

@@ -95,6 +95,26 @@ H.filterType(); // "lowpass" | "highpass" | "bandpass" | "bandstop" | "allpass" 
 (H.naturalFrequency(), H.qFactor(), H.dampingRatio());
 ```
 
+### Equivalents and power
+
+```ts
+c.equivalentResistance("a", "b"); // Ω (throws NOT_HOMOGENEOUS if the network is reactive)
+c.equivalentCapacitance("a"); // F, purely capacitive networks
+c.equivalentInductance("a"); // H, coupled inductors included
+c.equivalentResistance("a", "b", { mode: "dc" }); // Z(0) of any network
+c.equivalentCapacitance("a", "b", { mode: "freq", freq: 1e3 }); // value at 1 kHz
+
+const Z = c.impedance("a", "b"); // Z(s) as a TransferFunction: .evaluate(f), .toLatex(), .poles()…
+c.equivalentImpedance("a", "b", 1e3); // Complex Ω
+(c.inputImpedance("V1"), c.outputImpedance("out")); // Z(s)
+
+c.thevenin("out"); // { voltage, resistance, current (Norton), optimalLoad, maxPower }
+c.thevenin("out", undefined, { freq: 1e3 }); // phasors, complex impedance, conjugate match
+
+c.power(); // DC power per component (W)
+c.power({ freq: 1e3 }); // complex power S = ½·V·I* (W + j·var) per component
+```
+
 A runnable example lives in [`examples/rc-lowpass.ts`](./examples/rc-lowpass.ts).
 
 Supported components: R, C, L, coupled inductors (K), independent V/I sources, the four controlled sources (E, G, F, H), op-amps (ideal, finite gain, single-pole GBW) and fixed-state switches. See [algorithms](./docs/algorithms.md#modified-nodal-analysis) for how they are stamped.
@@ -107,7 +127,7 @@ Supported components: R, C, L, coupled inductors (K), independent V/I sources, t
 4. ✅ Linear components & Modified Nodal Analysis
 5. ✅ DC / AC analyses, `voltage` / `current`
 6. ✅ Numeric transfer functions
-7. Equivalent impedances, Thévenin / Norton, power
+7. ✅ Equivalent impedances, Thévenin / Norton, power
 8. Transient analysis
 9. SVG rendering
 10. Symbolic transfer functions
