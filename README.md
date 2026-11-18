@@ -136,6 +136,26 @@ tr.time; // s
 
 Sources keep their SPICE waveform (`SIN`, `PULSE`, `PWL`, `EXP`) unless overridden by `inputs`. The simulation starts from the DC operating point, or from the `IC=` values of capacitors and inductors when any is given (`initial: "op" | "ic"` to force).
 
+### Schematic drawing
+
+```ts
+const svg = c.toSVG(); // standalone <svg> string, IEC symbols, light/dark aware
+c.toSVG({
+  style: "ansi", // zig-zag resistors, +/− sources
+  showValues: true, // "10 kΩ", "AC 1 V", "10·V(c,0)"…
+  showIds: true,
+  nodeLabels: "named", // true (all), false, or "named": hides purely numeric SPICE nodes
+  highlight: ["R1", "out"], // components and/or nodes drawn in the accent colour
+  theme: "auto", // "light" | "dark" | "none" (no <style>, style it yourself)
+  scale: 20, // px per grid unit
+  background: false,
+  title: "RC low-pass", // <title> for accessibility
+});
+c.layout(); // the placement itself: components, pins, wire segments, junctions, grounds
+```
+
+The layout is computed from scratch, without any external library: nodes are ordered into columns from the source to the output, shunt elements hang vertically to individual ground symbols, series elements run horizontally and feedback branches go above; wires are then routed on a grid by an A* maze router that forbids overlaps and only allows perpendicular crossings. Every element carries `data-id` / `data-node` / `data-type` attributes so a host page can make the drawing interactive. Details in [algorithms](./docs/algorithms.md#schematic-layout).
+
 A runnable example lives in [`examples/rc-lowpass.ts`](./examples/rc-lowpass.ts).
 
 Supported components: R, C, L, coupled inductors (K), independent V/I sources, the four controlled sources (E, G, F, H), op-amps (ideal, finite gain, single-pole GBW) and fixed-state switches. See [algorithms](./docs/algorithms.md#modified-nodal-analysis) for how they are stamped.
@@ -150,7 +170,7 @@ Supported components: R, C, L, coupled inductors (K), independent V/I sources, t
 6. ✅ Numeric transfer functions
 7. ✅ Equivalent impedances, Thévenin / Norton, power
 8. ✅ Transient analysis
-9. SVG rendering
+9. ✅ SVG rendering
 10. Symbolic transfer functions
 11. Non-linear components (diodes, BJT, MOSFET)
 
