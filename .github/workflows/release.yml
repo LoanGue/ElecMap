@@ -1,8 +1,8 @@
 name: Release
 
+# Manual only until the first npm release (switch back to `push: branches: [main]` then).
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
