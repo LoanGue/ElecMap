@@ -1,6 +1,7 @@
 # ElecMap
 
 [![CI](https://github.com/LoanGue/ElecMap/actions/workflows/ci.yml/badge.svg)](https://github.com/LoanGue/ElecMap/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-API-blue.svg)](https://loangue.github.io/ElecMap/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 > A TypeScript engine for electrical circuit analysis: describe a circuit as a SPICE netlist or JSON, then get transfer functions (numeric and literal, in LaTeX), node voltages, branch currents, equivalent impedances, time-domain responses and an SVG schematic, all from a single importable class.
@@ -63,7 +64,7 @@ Runnable with `npx tsx examples/<name>.ts` (all of them run in CI):
 - [Input formats](./docs/format.md): netlist syntax, JSON document, validation codes.
 - [Component catalogue](./docs/components.md): ports, fields, sign conventions.
 - [Algorithms](./docs/algorithms.md): MNA, transfer functions, transient, layout, symbolic engine.
-- API reference: `npm run docs` generates it into `docs/api` (typedoc).
+- [API reference](https://loangue.github.io/ElecMap/) (typedoc, rebuilt on every push to `main`; `npm run docs` builds it locally into `docs/api`).
 
 ## Circuit input
 
