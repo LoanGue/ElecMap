@@ -33,8 +33,8 @@ circuit.toSVG();
 
 ## Roadmap
 
-1. Tooling & CI
-2. Math core (complex numbers, polynomials, linear solvers)
+1. ✅ Tooling & CI
+2. ✅ Math core (complex numbers, polynomials, linear solvers)
 3. Input formats (SPICE parser, JSON schema, validation)
 4. Linear components & Modified Nodal Analysis
 5. DC / AC analyses, `voltage` / `current`
@@ -52,7 +52,7 @@ npm install
 npm run check   # lint, format, type-check, tests, build
 ```
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full workflow.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full workflow and [docs/algorithms.md](./docs/algorithms.md) for the numerical methods.
 
 ## License
 
