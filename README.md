@@ -95,6 +95,28 @@ H.filterType(); // "lowpass" | "highpass" | "bandpass" | "bandstop" | "allpass" 
 (H.naturalFrequency(), H.qFactor(), H.dampingRatio());
 ```
 
+### Symbolic transfer functions
+
+```ts
+const c = new ElecMap(`
+V1 in 0 AC 1
+R1 in a 10k
+R2 a b 10k
+C1 a out 10n
+C2 b 0 10n
+X1 b out out OPAMP
+`);
+const H = c.symbolicTransferFunction("out");
+H.toLatex({ name: "H(s)" });
+// H(s) = \frac{1}{1 + C_{2} \left(R_{1} + R_{2}\right) s + R_{1} R_{2} C_{1} C_{2} s^{2}}
+H.toString(); // V(out)/V1 = (1) / (1 + s*R1*C2 + s*R2*C2 + s^2*R1*R2*C1*C2)
+H.substitute({ R1: 22e3 }); // numeric TransferFunction with new values (others: circuit values)
+c.symbolicTransferFunction({ output: "out", symbols: ["C1", "C2"] }); // R1, R2 kept numeric
+c.symbolicImpedance("a"); // literal Z(s)
+```
+
+Each component becomes a symbol named after its id (`R1` → `R_{1}`, `Rf` → `R_{f}`; `names` overrides it); controlled sources give `A_{E1}`, `g_{G1}`, `\beta_{F1}`, `r_{H1}`, couplings a mutual inductance `M_{K1}`, finite-gain op-amps `A_{X1}` and `\omega_{X1}`. The expression is exact: common monomial factors are removed, but non-trivial common factors are not searched for.
+
 ### Equivalents and power
 
 ```ts
@@ -171,7 +193,7 @@ Supported components: R, C, L, coupled inductors (K), independent V/I sources, t
 7. ✅ Equivalent impedances, Thévenin / Norton, power
 8. ✅ Transient analysis
 9. ✅ SVG rendering
-10. Symbolic transfer functions
+10. ✅ Symbolic transfer functions
 11. Non-linear components (diodes, BJT, MOSFET)
 
 ## Development
