@@ -115,6 +115,27 @@ c.power(); // DC power per component (W)
 c.power({ freq: 1e3 }); // complex power S = ½·V·I* (W + j·var) per component
 ```
 
+### Time domain
+
+```ts
+const H = c.transferFunction({ input: "V1", output: "out" });
+H.stepResponse({ tStop: 5e-3 }); // { time, value } — exact (matrix exponential), zero initial state
+H.impulseResponse(); // h(t); a Dirac part (direct feed-through) is returned as `impulse`
+H.stepInfo(); // { finalValue, peak, peakTime, overshoot (%), riseTime (10–90 %), settlingTime (2 %) }
+H.response((t) => Math.sin(2 * Math.PI * 1e3 * t), { tStop: 5e-3 }); // any input
+
+const tr = c.transient({
+  tStop: 10e-3,
+  tStep: 1e-6, // default tStop / 1000
+  method: "gear2", // or "trap", "euler"
+  inputs: { V1: { kind: "pulse", v1: 0, v2: 5, width: 1e-3, period: 2e-3 } }, // or (t) => …
+});
+tr.time; // s
+(tr.voltage("out"), tr.current("C1"), tr.power("R1")); // arrays aligned with tr.time
+```
+
+Sources keep their SPICE waveform (`SIN`, `PULSE`, `PWL`, `EXP`) unless overridden by `inputs`. The simulation starts from the DC operating point, or from the `IC=` values of capacitors and inductors when any is given (`initial: "op" | "ic"` to force).
+
 A runnable example lives in [`examples/rc-lowpass.ts`](./examples/rc-lowpass.ts).
 
 Supported components: R, C, L, coupled inductors (K), independent V/I sources, the four controlled sources (E, G, F, H), op-amps (ideal, finite gain, single-pole GBW) and fixed-state switches. See [algorithms](./docs/algorithms.md#modified-nodal-analysis) for how they are stamped.
@@ -128,7 +149,7 @@ Supported components: R, C, L, coupled inductors (K), independent V/I sources, t
 5. ✅ DC / AC analyses, `voltage` / `current`
 6. ✅ Numeric transfer functions
 7. ✅ Equivalent impedances, Thévenin / Norton, power
-8. Transient analysis
+8. ✅ Transient analysis
 9. SVG rendering
 10. Symbolic transfer functions
 11. Non-linear components (diodes, BJT, MOSFET)

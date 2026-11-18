@@ -10,6 +10,8 @@ import { acAnalysis, acSweep } from "./analysis/ac";
 import type { AcExcitation, AcSweep, AcSweepOptions } from "./analysis/ac";
 import type { AcSolution, DcSolution } from "./analysis/solution";
 import { transferFunction } from "./analysis/transfer";
+import { transient } from "./analysis/transient";
+import type { TransientOptions, TransientResult } from "./analysis/transient";
 import {
   equivalentCapacitance,
   equivalentInductance,
@@ -151,6 +153,18 @@ export class ElecMap {
   /** AC analysis over a frequency range. */
   acSweep(options: AcSweepOptions): AcSweep {
     return acSweep(this.system, options);
+  }
+
+  /**
+   * Transient (time-domain) analysis.
+   *
+   * ```ts
+   * const tr = c.transient({ tStop: 5e-3, inputs: { V1: { kind: "step", v2: 5 } } });
+   * tr.time; tr.voltage("out"); tr.current("R1");
+   * ```
+   */
+  transient(options: TransientOptions): TransientResult {
+    return transient(this.system, options);
   }
 
   /**
