@@ -71,3 +71,22 @@ Poles and zeros come from the Aberth–Ehrlich solver. Cutoff frequencies are fo
 The step matrix is factorised once. The initial state is the DC operating point with the sources at `t = 0`, or, with initial conditions, the charges `C·x(0)` built from the `IC=` values; consistent algebraic unknowns are then obtained with a vanishing backward-Euler step. Currents of capacitors and inductors' voltages use the derivative `x'`, estimated by second-order backward differences.
 
 **Responses of a transfer function** (`stepResponse`, `impulseResponse`, `response`) are exact: `H(s)` is turned into a controllable canonical state-space model (time-scaled by `σ`, the geometric mean of the poles' magnitudes, for conditioning), discretised with the matrix exponential of the augmented matrix `[[A, B], [0, 0]]·h` (scaling and squaring, Padé 13 — Higham 2005). Inputs are held constant over a step, so steps and piecewise-constant inputs are exact, and smooth inputs have an `O(h)` error.
+
+## Schematic layout
+
+`src/render` draws a circuit without any external dependency, in three stages.
+
+**1. Placement (`layout.ts`).** Nodes (ground excluded) get a column and a row on a coarse grid:
+
+- a breadth-first search from the hot node of the first grounded source orients every two-terminal branch from left to right; op-amp inputs always point towards their output. Cycles are broken by a Kahn topological sort;
+- a node's column is one more than the furthest of its predecessors (the nearest for ordinary branches, so that parallel paths stay compact); disconnected sub-circuits are placed side by side;
+- rows are ordered by the barycentre of the predecessors' rows (inverting op-amp inputs on top), and an op-amp output is aligned with its inputs so that the input wire stays straight;
+- each column is widened by the number of shunt elements it carries.
+
+Components are then placed in priority order, each taking the first candidate position whose footprint (body, texts and pins) is free: op-amps, shunt elements (vertical, with their own ground symbol, sources first), series elements between adjacent columns (horizontal), branches inside one column (vertical) and long or feedback branches (above the circuit).
+
+**2. Routing (`router.ts`).** Wires are routed on the unit grid by an A* search over (vertex, incoming direction) states, so that bends can be costed (step 1, bend 4, crossing 8, near a text 6). Component bodies are hard obstacles. Between different nets the router forbids shared segments and any contact at a pin, bend or junction; only straight perpendicular crossings are allowed. Each net is grown as a rectilinear Steiner tree: starting from its anchor point (or a pin), the nearest unconnected pin is routed to the existing tree. Nets are routed shortest first. If no legal path exists, the search is repeated with every forbidden move replaced by a large penalty, so routing never fails. Dangling stubs are pruned and unit edges merged into maximal segments; a junction dot is drawn where three or more wire ends meet.
+
+**3. Rendering (`svg.ts`).** Symbols are drawn in a local frame and rotated into place; IEC and ANSI variants are available. Colours are CSS variables with a `prefers-color-scheme` dark variant, and every element carries `data-*` attributes for interactivity.
+
+The test suite checks, for reference circuits and for random netlists, that every net is connected, that no two nets share a segment or touch, and that no wire crosses a component body.

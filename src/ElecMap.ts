@@ -11,6 +11,10 @@ import type { AcExcitation, AcSweep, AcSweepOptions } from "./analysis/ac";
 import type { AcSolution, DcSolution } from "./analysis/solution";
 import { transferFunction } from "./analysis/transfer";
 import { transient } from "./analysis/transient";
+import { layoutCircuit } from "./render/layout";
+import type { SchematicLayout } from "./render/layout";
+import { renderSvg } from "./render/svg";
+import type { SvgOptions } from "./render/svg";
 import type { TransientOptions, TransientResult } from "./analysis/transient";
 import {
   equivalentCapacitance,
@@ -165,6 +169,26 @@ export class ElecMap {
    */
   transient(options: TransientOptions): TransientResult {
     return transient(this.system, options);
+  }
+
+  /**
+   * Schematic geometry (grid units): placed components, routed wires, junctions.
+   * Useful to build interactive views; {@link ElecMap.toSVG} renders it.
+   */
+  layout(): SchematicLayout {
+    return layoutCircuit(this.compiled);
+  }
+
+  /**
+   * Schematic as a standalone SVG string (IEC symbols by default).
+   *
+   * ```ts
+   * c.toSVG({ style: "ansi", highlight: ["R1", "out"], theme: "light" });
+   * ```
+   */
+  toSVG(options: SvgOptions = {}): string {
+    const layout = layoutCircuit(this.compiled, { showValues: options.showValues ?? true });
+    return renderSvg(layout, { title: this.title ?? "Circuit schematic", ...options });
   }
 
   /**
