@@ -1,0 +1,118 @@
+import type { ComponentType } from "./types";
+
+/** Constraint applied to a numeric field. */
+export type NumberConstraint = "any" | "positive" | "nonNegative" | "coupling";
+
+/** Static description of a component type (used for validation, docs and tooling). */
+export interface ComponentSpec {
+  type: ComponentType;
+  /** SPICE element letter. */
+  letter: string;
+  /** Human-readable name. */
+  name: string;
+  /** Port names, in the order of the `nodes` array. */
+  ports: readonly string[];
+  /** Name of the controlling node pair field, if any. */
+  control?: "control";
+  /** Numeric fields: name → [required, constraint]. */
+  numbers: Readonly<Record<string, readonly [boolean, NumberConstraint]>>;
+  /** Unit of the main value, for display. */
+  unit?: string;
+}
+
+/** Catalogue of every component type supported by the canonical format. */
+export const COMPONENT_CATALOG: Readonly<Record<ComponentType, ComponentSpec>> = {
+  resistor: {
+    type: "resistor",
+    letter: "R",
+    name: "Resistor",
+    ports: ["a", "b"],
+    numbers: { value: [true, "positive"] },
+    unit: "Ω",
+  },
+  capacitor: {
+    type: "capacitor",
+    letter: "C",
+    name: "Capacitor",
+    ports: ["a", "b"],
+    numbers: { value: [true, "positive"], ic: [false, "any"] },
+    unit: "F",
+  },
+  inductor: {
+    type: "inductor",
+    letter: "L",
+    name: "Inductor",
+    ports: ["a", "b"],
+    numbers: { value: [true, "positive"], ic: [false, "any"] },
+    unit: "H",
+  },
+  vsource: {
+    type: "vsource",
+    letter: "V",
+    name: "Voltage source",
+    ports: ["p", "n"],
+    numbers: { dc: [false, "any"] },
+    unit: "V",
+  },
+  isource: {
+    type: "isource",
+    letter: "I",
+    name: "Current source",
+    ports: ["p", "n"],
+    numbers: { dc: [false, "any"] },
+    unit: "A",
+  },
+  vcvs: {
+    type: "vcvs",
+    letter: "E",
+    name: "Voltage-controlled voltage source",
+    ports: ["p", "n"],
+    control: "control",
+    numbers: { gain: [true, "any"] },
+  },
+  vccs: {
+    type: "vccs",
+    letter: "G",
+    name: "Voltage-controlled current source",
+    ports: ["p", "n"],
+    control: "control",
+    numbers: { gain: [true, "any"] },
+    unit: "S",
+  },
+  cccs: {
+    type: "cccs",
+    letter: "F",
+    name: "Current-controlled current source",
+    ports: ["p", "n"],
+    numbers: { gain: [true, "any"] },
+  },
+  ccvs: {
+    type: "ccvs",
+    letter: "H",
+    name: "Current-controlled voltage source",
+    ports: ["p", "n"],
+    numbers: { gain: [true, "any"] },
+    unit: "Ω",
+  },
+  opamp: {
+    type: "opamp",
+    letter: "X",
+    name: "Operational amplifier",
+    ports: ["in+", "in-", "out"],
+    numbers: { gain: [false, "positive"], gbw: [false, "positive"] },
+  },
+  coupling: {
+    type: "coupling",
+    letter: "K",
+    name: "Inductive coupling",
+    ports: [],
+    numbers: { k: [true, "coupling"] },
+  },
+  switch: {
+    type: "switch",
+    letter: "S",
+    name: "Switch",
+    ports: ["a", "b"],
+    numbers: { ron: [false, "nonNegative"], roff: [false, "positive"] },
+  },
+};
