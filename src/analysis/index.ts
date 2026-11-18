@@ -23,3 +23,13 @@ export type {
   TransferLatexOptions,
   FilterType,
 } from "./transfer";
+export {
+  impedance,
+  inputImpedance,
+  equivalentResistance,
+  equivalentCapacitance,
+  equivalentInductance,
+  theveninDc,
+  theveninAc,
+} from "./equivalent";
+export type { EquivalentOptions, DcEquivalent, AcEquivalent } from "./equivalent";
