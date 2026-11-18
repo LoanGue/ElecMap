@@ -72,6 +72,17 @@ The step matrix is factorised once. The initial state is the DC operating point 
 
 **Responses of a transfer function** (`stepResponse`, `impulseResponse`, `response`) are exact: `H(s)` is turned into a controllable canonical state-space model (time-scaled by `σ`, the geometric mean of the poles' magnitudes, for conditioning), discretised with the matrix exponential of the augmented matrix `[[A, B], [0, 0]]·h` (scaling and squaring, Padé 13 — Higham 2005). Inputs are held constant over a step, so steps and piecewise-constant inputs are exact, and smooth inputs have an `O(h)` error.
 
+## Symbolic transfer functions
+
+`src/symbolic` rebuilds the MNA matrix with entries that are sparse multivariate polynomials (`MPoly`) in `s` and in one variable per literal component. Resistors enter through a hidden conductance `G = 1/R`, so that every stamp stays polynomial.
+
+- **Determinant.** `det(A)` is computed by Laplace expansion along the rows (sparsest first), memoised on the set of columns already used. It is exact, needs no division (unlike Bareiss, which would require exact multivariate division) and is fast on the very sparse MNA matrices. A guard rejects circuits whose expansion would explode (keep fewer symbols with the `symbols` option).
+- **Numerator.** With `A·x = b·u` and an output `y = f·x`, the bordered determinant gives `det([[A, b], [f, 0]]) = −det(A)·f·A⁻¹·b`, so `N = −det([[A, b], [f, 0]])` and `H = N / det(A)` without solving anything.
+- **Conductances.** Each `G` appears with a bounded power `e` (1 for a resistor); `N` and `D` are both multiplied by `R^e` and `G^k` is replaced by `R^{e−k}`.
+- **Simplification.** Common monomials and integer factors are removed and the sign of `D` is fixed; a purely numeric constant term of `D` is scaled to 1. LaTeX groups the terms by power of `s` and factors out the common monomial of each group: `C_{2} \left(R_{1} + R_{2}\right) s`.
+
+The test suite checks every expression against the numeric engine by substituting the component values.
+
 ## Schematic layout
 
 `src/render` draws a circuit without any external dependency, in three stages.

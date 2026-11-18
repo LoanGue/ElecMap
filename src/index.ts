@@ -16,5 +16,6 @@ export type { CompileOptions, CircuitInput } from "./core/circuit";
 export * from "./mna";
 export * from "./analysis";
 export * from "./render";
+export * from "./symbolic";
 export { ElecMap } from "./ElecMap";
 export type { AnalysisPoint } from "./ElecMap";

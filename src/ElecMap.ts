@@ -14,6 +14,9 @@ import { transient } from "./analysis/transient";
 import { layoutCircuit } from "./render/layout";
 import type { SchematicLayout } from "./render/layout";
 import { renderSvg } from "./render/svg";
+import { symbolicImpedance, symbolicTransferFunction } from "./symbolic/transfer";
+import type { SymbolicTransferFunction, SymbolicTransferOptions } from "./symbolic/transfer";
+import type { SymbolicOptions } from "./symbolic/system";
 import type { SvgOptions } from "./render/svg";
 import type { TransientOptions, TransientResult } from "./analysis/transient";
 import {
@@ -242,6 +245,31 @@ export class ElecMap {
         ? (spec as TransferOptions)
         : { output: spec as OutputSpec };
     return transferFunction(this.system, options);
+  }
+
+  /**
+   * Literal transfer function, with the component names as symbols.
+   *
+   * ```ts
+   * c.symbolicTransferFunction("out").toLatex(); // \frac{1}{1 + R_{1} C_{1} s}
+   * c.symbolicTransferFunction({ output: "out", symbols: ["R1"] }); // others numeric
+   * ```
+   */
+  symbolicTransferFunction(spec: OutputSpec | SymbolicTransferOptions): SymbolicTransferFunction {
+    const options: SymbolicTransferOptions =
+      typeof spec === "object" && !Array.isArray(spec) && "output" in spec
+        ? (spec as SymbolicTransferOptions)
+        : { output: spec as OutputSpec };
+    return symbolicTransferFunction(this.system, options);
+  }
+
+  /** Literal impedance between two nodes (`b` defaults to ground), sources off. */
+  symbolicImpedance(
+    a: NodeName,
+    b?: NodeName,
+    options: SymbolicOptions = {},
+  ): SymbolicTransferFunction {
+    return symbolicImpedance(this.system, a, b, options);
   }
 
   // ------------------------------------------------------------- equivalents
