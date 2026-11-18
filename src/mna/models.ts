@@ -104,7 +104,9 @@ const branchForm = (k: number): LinearForm => form([term(k, 1)]);
 const admittanceForm = (a: number, b: number, g: number, c: number): LinearForm =>
   form([term(a, g, c), term(b, -g, -c)]);
 
-type ModelMap = { [K in ComponentType]: ComponentModel<Extract<ComponentJSON, { type: K }>> };
+export type ModelMap = {
+  [K in ComponentType]: ComponentModel<Extract<ComponentJSON, { type: K }>>;
+};
 
 /** Switch behaviour: ideal short (needs a branch), resistor, or open. */
 function switchMode(c: Extract<ComponentJSON, { type: "switch" }>): "short" | "resistor" | "open" {

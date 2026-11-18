@@ -1,35 +1,69 @@
 # ElecMap
 
-> A TypeScript engine for electrical circuit analysis: compile a schematic, feed it a signal, and get transfer functions, node voltages, branch currents, equivalent impedances and an optimised SVG drawing, all from a single importable class.
+[![CI](https://github.com/LoanGue/ElecMap/actions/workflows/ci.yml/badge.svg)](https://github.com/LoanGue/ElecMap/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-**Status:** 🚧 early development, not yet published on npm.
+> A TypeScript engine for electrical circuit analysis: describe a circuit as a SPICE netlist or JSON, then get transfer functions (numeric and literal, in LaTeX), node voltages, branch currents, equivalent impedances, time-domain responses and an SVG schematic, all from a single importable class.
 
-## Goals
+- **Zero runtime dependencies**, ESM + CommonJS, full type definitions.
+- Runs in **Node.js ≥ 18** and in **browsers**.
+- Linear analysis by Modified Nodal Analysis: rational H(s) with exact pole/zero structure, cross-checked against literal (symbolic) results in the test suite.
 
-- **Input formats:** standard SPICE netlists and a canonical, machine-readable JSON format (the compiled form).
-- **One class:** build an `ElecMap` instance from a schematic, then call analysis methods with your variables (input frequency, time, signal…).
-- **Analyses:** DC operating point, AC sweep, transient, transfer functions (LaTeX output, numeric then symbolic), poles/zeros, Bode data, voltage between any two nodes, current in any branch, equivalent R/L/C/Z, Thévenin/Norton, power balance.
-- **Rendering:** automatic, readable SVG schematic layout.
-- **Zero runtime dependencies**, ESM + CJS, full type definitions, works in browsers and Node.js.
+**Status:** feature-complete for linear circuits; the first npm release (`npm install elecmap`) is coming.
 
-## Planned API (preview)
+## Quick start
 
 ```ts
 import { ElecMap } from "elecmap";
 
-const circuit = new ElecMap(`
-V1 in 0 AC 1
+const c = new ElecMap(`
+V1 in 0 DC 5 AC 1
 R1 in out 1k
 C1 out 0 100n
 `);
 
-const H = circuit.transferFunction({ input: "V1", output: ["out", "0"] });
-H.toLatex(); // \frac{1}{1 + 10^{-4} s}
-H.evaluate(1591.5); // |H| ≈ 0.707, phase ≈ -45°
-circuit.voltage("in", "out", { freq: 1000 });
-circuit.current("R1", { freq: 1000 });
-circuit.toSVG();
+c.transferFunction("out").toLatex(); // \frac{1}{1 + 10^{-4}\,s}
+c.symbolicTransferFunction("out").toLatex(); // \frac{1}{1 + R_{1} C_{1} s}
+c.transferFunction("out").cutoffFrequency(); // 1591.55 Hz
+c.voltage("out", { freq: 1e3 }).abs(); // 0.847 V (AC phasor)
+c.current("R1"); // 0 A (DC operating point)
+c.inputImpedance("V1").evaluate(1e3); // Complex Ω seen by V1 at 1 kHz
+c.transient({ tStop: 1e-3 }).voltage("out"); // number[]
+c.toSVG(); // standalone <svg> schematic
 ```
+
+## Features
+
+| Area           | What you get                                                                                                    |
+| -------------- | --------------------------------------------------------------------------------------------------------------- |
+| Input          | SPICE netlists (engineering suffixes, `.title`, waveforms), canonical JSON, round-trip `toJSON()` / `toSpice()` |
+| DC / AC        | Operating point, phasors at any frequency, log sweeps, voltage between any two nodes, current in any branch     |
+| Transfer funcs | Exact H(s), LaTeX, Bode, poles/zeros, stability, filter type, cutoff, Q, ω₀, ζ, response to sines               |
+| Literal H(s)   | Transfer functions and impedances in terms of component symbols (`R_{1}`, `C_{2}`…), with partial substitution  |
+| Equivalents    | Equivalent R, L, C and Z(s), input/output impedance, Thévenin / Norton, maximum power transfer                  |
+| Power          | DC and complex AC power per component                                                                           |
+| Time domain    | Exact step/impulse/arbitrary-input responses of H(s); transient simulation (trapezoidal, Gear-2, Euler)         |
+| Schematics     | Automatic SVG layout and routing, IEC or ANSI symbols, light/dark themes, interactive `data-*` attributes       |
+
+Components: R, L, C, coupled inductors / transformers, independent V and I sources (DC, AC, sine, pulse, PWL, exp), the four controlled sources (E, F, G, H), op-amps (ideal, finite gain, single-pole GBW) and fixed-state switches.
+
+## Examples
+
+Runnable with `npx tsx examples/<name>.ts` (all of them run in CI):
+
+- [`rc-lowpass.ts`](./examples/rc-lowpass.ts): transfer function, Bode table, DC value, response to a sine.
+- [`sallen-key.ts`](./examples/sallen-key.ts): literal vs numeric H(s), Q and f₀, re-tuning by substitution, step response.
+- [`rlc-transient.ts`](./examples/rlc-transient.ts): transient simulation of a square-wave driven RLC compared with the exact step response.
+- [`bridge-thevenin.ts`](./examples/bridge-thevenin.ts): node voltages, Thévenin equivalent, literal unbalance voltage, power balance.
+- [`json-input.ts`](./examples/json-input.ts): building a circuit from JSON, exporting SPICE, error codes.
+- [`schematic.ts`](./examples/schematic.ts): writes IEC and ANSI SVG drawings of a few circuits.
+
+## Documentation
+
+- [Input formats](./docs/format.md): netlist syntax, JSON document, validation codes.
+- [Component catalogue](./docs/components.md): ports, fields, sign conventions.
+- [Algorithms](./docs/algorithms.md): MNA, transfer functions, transient, layout, symbolic engine.
+- API reference: `npm run docs` generates it into `docs/api` (typedoc).
 
 ## Circuit input
 
@@ -178,9 +212,14 @@ c.layout(); // the placement itself: components, pins, wire segments, junctions,
 
 The layout is computed from scratch, without any external library: nodes are ordered into columns from the source to the output, shunt elements hang vertically to individual ground symbols, series elements run horizontally and feedback branches go above; wires are then routed on a grid by an A* maze router that forbids overlaps and only allows perpendicular crossings. Every element carries `data-id` / `data-node` / `data-type` attributes so a host page can make the drawing interactive. Details in [algorithms](./docs/algorithms.md#schematic-layout).
 
-A runnable example lives in [`examples/rc-lowpass.ts`](./examples/rc-lowpass.ts).
-
 Supported components: R, C, L, coupled inductors (K), independent V/I sources, the four controlled sources (E, G, F, H), op-amps (ideal, finite gain, single-pole GBW) and fixed-state switches. See [algorithms](./docs/algorithms.md#modified-nodal-analysis) for how they are stamped.
+
+## Limitations
+
+- Linear circuits only for now: no diodes or transistors yet, and switches have a fixed state.
+- No `.subckt` / `.model` / `.include`: netlists must be flat.
+- Literal transfer functions remove common monomial factors only; a pole/zero cancellation that holds for every component value may leave the expression one order higher than the numeric one. They are limited to about 30 unknowns (use `symbols` to keep only some components literal).
+- Dense linear algebra: comfortable up to a few hundred nodes.
 
 ## Roadmap
 
@@ -194,7 +233,9 @@ Supported components: R, C, L, coupled inductors (K), independent V/I sources, t
 8. ✅ Transient analysis
 9. ✅ SVG rendering
 10. ✅ Symbolic transfer functions
-11. Non-linear components (diodes, BJT, MOSFET)
+11. ✅ Documentation, examples, packaging checks
+12. First npm release (v0.1.0)
+13. Non-linear components (diodes, BJT, MOSFET, Newton-Raphson), `.subckt`, sensitivities
 
 ## Development
 

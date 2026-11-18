@@ -4,8 +4,11 @@
  * @packageDocumentation
  */
 
-/** Current version of the ElecMap package. */
-export const VERSION = "0.0.0";
+declare const __ELECMAP_VERSION__: string | undefined;
+
+/** Current version of the ElecMap package (injected from `package.json` at build time). */
+export const VERSION: string =
+  typeof __ELECMAP_VERSION__ === "string" ? __ELECMAP_VERSION__ : "0.0.0-dev";
 
 export { ElecMapError } from "./core/errors";
 export type { ElecMapErrorCode } from "./core/errors";
