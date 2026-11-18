@@ -1,7 +1,17 @@
 /**
- * ElecMap — electrical circuit analysis engine.
+ * ElecMap: electrical circuit analysis engine.
  *
  * @packageDocumentation
+ * @document ../docs/.build/getting-started.md
+ * @document ../docs/.build/voltages-currents-power.md
+ * @document ../docs/.build/transfer-functions.md
+ * @document ../docs/.build/literal-transfer-functions.md
+ * @document ../docs/.build/impedances-equivalents.md
+ * @document ../docs/.build/time-domain.md
+ * @document ../docs/.build/schematics.md
+ * @document ../docs/.build/format.md
+ * @document ../docs/.build/components.md
+ * @document ../docs/.build/algorithms.md
  */
 
 declare const __ELECMAP_VERSION__: string | undefined;

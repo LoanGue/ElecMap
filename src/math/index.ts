@@ -9,3 +9,4 @@ export { polynomialRoots } from "./roots";
 export type { RootOptions } from "./roots";
 export { expm, matMul, matVec, identity } from "./expm";
 export type { Matrix } from "./expm";
+export { displayNumber } from "./display";

@@ -30,9 +30,34 @@ export interface SymbolicLatexOptions {
  * Common monomial and integer factors are removed; non-monomial common factors
  * are not searched for, so the expression may be of higher order than the
  * numeric transfer function when pole/zero pairs cancel for every value.
+ *
+ * Get one with {@link ElecMap.symbolicTransferFunction} or {@link ElecMap.symbolicImpedance}.
+ * The examples of this page use a Sallen-Key low-pass filter:
+ *
+ * ```ts
+ * import { ElecMap } from "elecmap";
+ *
+ * const filter = new ElecMap(`
+ * V1 in 0 AC 1
+ * R1 in a 10k
+ * R2 a b 10k
+ * C1 a out 22n
+ * C2 b 0 10n
+ * X1 b out out OPAMP
+ * `);
+ * const H = filter.symbolicTransferFunction("out");
+ * ```
  */
 export class SymbolicTransferFunction {
-  /** Literal symbols, in display order. */
+  /**
+   * Literal symbols, in display order.
+   *
+   * @example
+   * ```ts
+   * H.symbols.map((x) => x.latex); // ["R_{1}", "R_{2}", "C_{1}", "C_{2}"]
+   * H.symbols[2]; // { id: "C1", latex: "C_{1}", name: "C1", kind: "capacitance", value: 2.2e-8 }
+   * ```
+   */
   readonly symbols: readonly CircuitSymbol[];
 
   constructor(
@@ -47,17 +72,38 @@ export class SymbolicTransferFunction {
     this.symbols = symbols;
   }
 
-  /** Coefficients `[n₀, n₁, …]` of the numerator, as polynomials in the symbols. */
+  /**
+   * Coefficients `[n₀, n₁, …]` of the numerator, as polynomials in the symbols.
+   *
+   * @example
+   * ```ts
+   * H.numeratorCoefficients.length; // 1   (constant numerator)
+   * ```
+   */
   get numeratorCoefficients(): MPoly[] {
     return this.num.coefficientsIn(0);
   }
 
-  /** Coefficients `[d₀, d₁, …]` of the denominator. */
+  /**
+   * Coefficients `[d₀, d₁, …]` of the denominator.
+   *
+   * @example
+   * ```ts
+   * H.denominatorCoefficients.length; // 3   (1, C2·(R1 + R2), R1·R2·C1·C2)
+   * ```
+   */
   get denominatorCoefficients(): MPoly[] {
     return this.den.coefficientsIn(0);
   }
 
-  /** Order of the expression (degree of `D` in `s`). */
+  /**
+   * Order of the expression (degree of `D` in `s`).
+   *
+   * @example
+   * ```ts
+   * H.order; // 2
+   * ```
+   */
   get order(): number {
     return this.den.degreeIn(0);
   }
@@ -65,6 +111,12 @@ export class SymbolicTransferFunction {
   /**
    * Numeric transfer function obtained by giving the symbols values: their
    * circuit values by default, overridden by `values` (keyed by component id).
+   *
+   * @example
+   * ```ts
+   * H.substitute().naturalFrequency(); // 1073.0   (netlist values)
+   * H.substitute({ C1: 20e-9 }).qFactor(); // 0.7071   (C1 changed, others from the netlist)
+   * ```
    */
   substitute(values: Readonly<Record<string, number>> = {}): TransferFunction {
     const vals = [0, ...this.symbols.map((sym) => values[sym.id] ?? sym.value)];
@@ -83,7 +135,16 @@ export class SymbolicTransferFunction {
     return new TransferFunction(new Rational(poly(this.num), den), this.meta);
   }
 
-  /** LaTeX, e.g. `\frac{1}{1 + R_{1} C_{1} s}`. */
+  /**
+   * LaTeX, e.g. `\frac{1}{1 + R_{1} C_{1} s}`.
+   *
+   * @example
+   * ```ts
+   * H.toLatex({ name: "H(s)" });
+   * // "H(s) = \frac{1}{1 + C_{2} \left(R_{1} + R_{2}\right) s + R_{1} R_{2} C_{1} C_{2} s^{2}}"
+   * H.toLatex({ order: "descending" }); // highest power of s first
+   * ```
+   */
   toLatex(options: SymbolicLatexOptions = {}): string {
     const fmt = (p: MPoly) => this.polyLatex(p, options);
     const isOne = this.den.size === 1 && this.den.minExponents().every((e) => e === 0);
@@ -97,7 +158,14 @@ export class SymbolicTransferFunction {
     return options.name ? `${options.name} = ${body}` : body;
   }
 
-  /** Plain text, e.g. `1 / (1 + R1*C1*s)`. */
+  /**
+   * Plain text, e.g. `1 / (1 + R1*C1*s)`.
+   *
+   * @example
+   * ```ts
+   * H.toString(); // "V(out)/V1 = (1) / (1 + s*R1*C2 + s*R2*C2 + s^2*R1*R2*C1*C2)"
+   * ```
+   */
   toString(): string {
     const text = (p: MPoly) => this.polyText(p);
     const label =

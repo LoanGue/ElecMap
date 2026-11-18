@@ -22,6 +22,11 @@ export default tseslint.config(
     languageOptions: { globals: { process: "readonly", console: "readonly" } },
   },
   {
+    // Script loaded by the documentation site: browser globals.
+    files: ["docs/site/theme.js"],
+    languageOptions: { globals: { document: "readonly", katex: "readonly" } },
+  },
+  {
     rules: {
       "@typescript-eslint/consistent-type-imports": "error",
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],

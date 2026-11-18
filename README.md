@@ -61,10 +61,10 @@ Runnable with `npx tsx examples/<name>.ts` (all of them run in CI):
 
 ## Documentation
 
-- [Input formats](./docs/format.md): netlist syntax, JSON document, validation codes.
-- [Component catalogue](./docs/components.md): ports, fields, sign conventions.
-- [Algorithms](./docs/algorithms.md): MNA, transfer functions, transient, layout, symbolic engine.
-- [API reference](https://loangue.github.io/ElecMap/) (typedoc, rebuilt on every push to `main`; `npm run docs` builds it locally into `docs/api`).
+- [Input formats](./docs/en/format.md): netlist syntax, JSON document, validation codes.
+- [Component catalogue](./docs/en/components.md): ports, fields, sign conventions.
+- [Algorithms](./docs/en/algorithms.md): MNA, transfer functions, transient, layout, symbolic engine.
+- [Documentation site](https://loangue.github.io/ElecMap/): guides with runnable examples and the full API reference, also [in French](https://loangue.github.io/ElecMap/fr/). It is rebuilt on every push to `main`; `npm run docs` builds it locally into `docs/api` (sources in `docs/en`, `docs/fr` and `docs/site`).
 
 ## Circuit input
 
@@ -82,8 +82,8 @@ circuit.nodes; // ["in", "out"]
 circuit.toJSON(); // { version: 1, ground: "0", components: [...] }
 ```
 
-- [Formats: netlist syntax, JSON document, validation codes](./docs/format.md)
-- [Component catalogue: ports, fields, sign conventions](./docs/components.md)
+- [Formats: netlist syntax, JSON document, validation codes](./docs/en/format.md)
+- [Component catalogue: ports, fields, sign conventions](./docs/en/components.md)
 
 ## Analyses available today
 
@@ -211,9 +211,9 @@ c.toSVG({
 c.layout(); // the placement itself: components, pins, wire segments, junctions, grounds
 ```
 
-The layout is computed from scratch, without any external library: nodes are ordered into columns from the source to the output, shunt elements hang vertically to individual ground symbols, series elements run horizontally and feedback branches go above; wires are then routed on a grid by an A* maze router that forbids overlaps and only allows perpendicular crossings. Every element carries `data-id` / `data-node` / `data-type` attributes so a host page can make the drawing interactive. Details in [algorithms](./docs/algorithms.md#schematic-layout).
+The layout is computed from scratch, without any external library: nodes are ordered into columns from the source to the output, shunt elements hang vertically to individual ground symbols, series elements run horizontally and feedback branches go above; wires are then routed on a grid by an A* maze router that forbids overlaps and only allows perpendicular crossings. Every element carries `data-id` / `data-node` / `data-type` attributes so a host page can make the drawing interactive. Details in [algorithms](./docs/en/algorithms.md#schematic-layout).
 
-Supported components: R, C, L, coupled inductors (K), independent V/I sources, the four controlled sources (E, G, F, H), op-amps (ideal, finite gain, single-pole GBW) and fixed-state switches. See [algorithms](./docs/algorithms.md#modified-nodal-analysis) for how they are stamped.
+Supported components: R, C, L, coupled inductors (K), independent V/I sources, the four controlled sources (E, G, F, H), op-amps (ideal, finite gain, single-pole GBW) and fixed-state switches. See [algorithms](./docs/en/algorithms.md#modified-nodal-analysis) for how they are stamped.
 
 ## Limitations
 
@@ -245,7 +245,7 @@ npm install
 npm run check   # lint, format, type-check, tests, build
 ```
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full workflow and [docs/algorithms.md](./docs/algorithms.md) for the numerical methods.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full workflow and [docs/algorithms.md](./docs/en/algorithms.md) for the numerical methods.
 
 ## License
 

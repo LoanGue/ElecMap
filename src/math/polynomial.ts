@@ -1,5 +1,6 @@
 import { ElecMapError } from "../core/errors";
 import { Complex } from "./complex";
+import { displayNumber } from "./display";
 
 /**
  * Relative threshold under which the result of an addition is considered to be
@@ -221,7 +222,8 @@ export class Polynomial {
     this.coeffs.forEach((c, k) => {
       if (c === 0) return;
       const v = k === 0 ? "" : k === 1 ? variable : `${variable}^${k}`;
-      terms.push(k === 0 ? `${c}` : c === 1 ? v : c === -1 ? `-${v}` : `${c}·${v}`);
+      const n = displayNumber(c);
+      terms.push(k === 0 ? n : n === "1" ? v : n === "-1" ? `-${v}` : `${n}·${v}`);
     });
     return terms.join(" + ").replace(/\+ -/g, "- ");
   }

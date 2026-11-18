@@ -74,5 +74,6 @@ describe("Polynomial", () => {
   it("formats", () => {
     expect(P(1, -2, 3).toString()).toBe("1 - 2·s + 3·s^2");
     expect(Polynomial.zero().toString()).toBe("0");
+    expect(P(9.999999999999998, 0.00009999999999999999).toString()).toBe("10 + 0.0001·s");
   });
 });

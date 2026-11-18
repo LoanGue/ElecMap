@@ -37,15 +37,20 @@ export type AnalysisPoint = "dc" | ({ freq: number } & AcExcitation);
 /**
  * Main entry point: a circuit plus every analysis available on it.
  *
+ * Every example on this page uses this RC low-pass filter, called `c`:
+ *
  * ```ts
+ * import { ElecMap } from "elecmap";
+ *
  * const c = new ElecMap(`
- *   V1 in 0 DC 5 AC 1
- *   R1 in out 1k
- *   C1 out 0 100n
+ * V1 in 0 DC 5 AC 1
+ * R1 in out 1k
+ * C1 out 0 100n
  * `);
- * c.voltage("out");                  // DC: 5 V
- * c.voltage("out", { freq: 1591.5 }); // AC phasor ≈ 0.707∠−45°
- * c.current("R1", "dc");
+ *
+ * c.voltage("out"); // 5        (DC, volts)
+ * c.voltage("out", { freq: 1000 }).abs(); // 0.8467   (amplitude at 1 kHz)
+ * c.transferFunction("out").cutoffFrequency(); // 1591.55  (Hz)
  * ```
  *
  * The class is designed to be extended: the compiled circuit and the MNA
@@ -59,17 +64,43 @@ export class ElecMap {
   private systemCache: MnaSystem | undefined;
   private dcCache: DcSolution | undefined;
 
+  /**
+   * Builds a circuit from a SPICE netlist or a JSON document. The input is
+   * validated: an invalid circuit throws an {@link ElecMapError}.
+   *
+   * @example
+   * ```ts
+   * new ElecMap("V1 in 0 AC 1\nR1 in out 1k\nC1 out 0 100n"); // SPICE netlist
+   * new ElecMap({ version: 1, components: [ ... ] }); // JSON document
+   * new ElecMap(netlist, { ground: "gnd" }); // another name for the ground node
+   * ```
+   */
   constructor(input: CircuitInput, options: CompileOptions = {}) {
     this.options = options;
     this.compiled = compile(input, options);
   }
 
-  /** Builds a circuit from a SPICE netlist. */
+  /**
+   * Builds a circuit from a SPICE netlist.
+   *
+   * @example
+   * ```ts
+   * ElecMap.fromSpice("V1 a 0 1\nR1 a 0 1k").current("R1"); // 0.001
+   * ```
+   */
   static fromSpice(netlist: string, options: CompileOptions = {}): ElecMap {
     return new this(netlist, options);
   }
 
-  /** Builds a circuit from a canonical JSON document. */
+  /**
+   * Builds a circuit from a canonical JSON document (object or string).
+   *
+   * @example
+   * ```ts
+   * const copy = ElecMap.fromJSON(c.toJSON());
+   * copy.nodes(); // ["in", "out"]
+   * ```
+   */
   static fromJSON(document: CircuitJSON | string, options: CompileOptions = {}): ElecMap {
     return new this(
       typeof document === "string" ? (JSON.parse(document) as CircuitJSON) : document,
@@ -79,7 +110,15 @@ export class ElecMap {
 
   // ---------------------------------------------------------------- structure
 
-  /** Compiled circuit (nodes, components, warnings). */
+  /**
+   * Compiled circuit (nodes, components, warnings).
+   *
+   * @example
+   * ```ts
+   * c.circuit.nodes; // ["in", "out"]
+   * c.circuit.warnings; // []
+   * ```
+   */
   get circuit(): CompiledCircuit {
     return this.compiled;
   }
@@ -89,27 +128,77 @@ export class ElecMap {
     return (this.systemCache ??= new MnaSystem(this.compiled));
   }
 
-  /** Circuit title, if any. */
+  /**
+   * Circuit title, if any (`.title` line, or first line of a classic SPICE deck).
+   *
+   * @example
+   * ```ts
+   * new ElecMap(".title RC low-pass\nV1 in 0 1\nR1 in 0 1k").title; // "RC low-pass"
+   * c.title; // undefined
+   * ```
+   */
   get title(): string | undefined {
     return this.compiled.title;
   }
 
-  /** Non-ground node names. */
+  /**
+   * Non-ground node names.
+   *
+   * @example
+   * ```ts
+   * c.nodes(); // ["in", "out"]
+   * ```
+   */
   nodes(): string[] {
     return [...this.compiled.nodes];
   }
 
-  /** All components. */
+  /**
+   * All components, as JSON objects.
+   *
+   * @example
+   * ```ts
+   * c.components()[1]; // { id: "R1", type: "resistor", nodes: ["in", "out"], value: 1000 }
+   * c.components().map((x) => x.id); // ["V1", "R1", "C1"]
+   * ```
+   */
   components(): ComponentJSON[] {
     return this.compiled.toJSON().components;
   }
 
-  /** Canonical JSON document. */
+  /**
+   * Canonical JSON document.
+   *
+   * @example
+   * ```ts
+   * c.toJSON();
+   * // {
+   * //   version: 1,
+   * //   components: [
+   * //     { id: "V1", type: "vsource", nodes: ["in", "0"], dc: 5, ac: { mag: 1 } },
+   * //     { id: "R1", type: "resistor", nodes: ["in", "out"], value: 1000 },
+   * //     { id: "C1", type: "capacitor", nodes: ["out", "0"], value: 1e-7 }
+   * //   ]
+   * // }
+   * ```
+   */
   toJSON(): CircuitJSON {
     return this.compiled.toJSON();
   }
 
-  /** SPICE netlist. */
+  /**
+   * SPICE netlist.
+   *
+   * @example
+   * ```ts
+   * c.toSpice();
+   * // * ElecMap circuit
+   * // V1 in 0 DC 5 AC 1
+   * // R1 in out 1k
+   * // C1 out 0 100n
+   * // .end
+   * ```
+   */
   toSpice(): string {
     return this.compiled.toSpice();
   }
@@ -118,8 +207,14 @@ export class ElecMap {
    * Changes a numeric field of a component (e.g. for parametric sweeps) and
    * invalidates cached results. Returns `this` for chaining.
    *
+   * The field defaults to `value` (R, L, C), `dc` (sources), `k` (couplings),
+   * `gain` (controlled sources, op-amps) or `ron` (switches).
+   *
+   * @example
    * ```ts
-   * c.setValue("R1", 2200).setValue("V1", 12, "dc");
+   * const divider = new ElecMap("V1 in 0 DC 10\nR1 in out 1k\nR2 out 0 1k");
+   * divider.setValue("R1", 3000).voltage("out"); // 2.5
+   * divider.setValue("V1", 12, "dc").voltage("out"); // 3
    * ```
    */
   setValue(id: string, value: number, field?: string): this {
@@ -146,28 +241,58 @@ export class ElecMap {
   /**
    * DC operating point (capacitors open, inductors shorted, sources at their `dc` value).
    * The default-option result is cached.
+   *
+   * @example
+   * ```ts
+   * const op = c.operatingPoint();
+   * op.nodeVoltages(); // { "0": 0, in: 5, out: 5 }
+   * op.currents(); // { V1: 0, R1: 0, C1: 0 }
+   * op.voltage("in", "out"); // 0
+   * ```
    */
   operatingPoint(options?: DcOptions): DcSolution {
     if (options) return operatingPoint(this.system, options);
     return (this.dcCache ??= operatingPoint(this.system));
   }
 
-  /** AC analysis at one frequency (Hz). */
+  /**
+   * AC analysis at one frequency (Hz): every voltage and current as a phasor.
+   *
+   * @example
+   * ```ts
+   * const ac = c.ac(1000);
+   * ac.voltage("out").toString(); // "0.716956800325 - 0.450477243368j"
+   * ac.current("R1").abs(); // 0.000532   (A)
+   * ```
+   */
   ac(freq: number, excitation: AcExcitation = {}): AcSolution {
     return acAnalysis(this.system, freq, excitation);
   }
 
-  /** AC analysis over a frequency range. */
+  /**
+   * AC analysis over a frequency range (`points` per decade by default).
+   *
+   * @example
+   * ```ts
+   * const sweep = c.acSweep({ fStart: 100, fStop: 10e3, points: 1 });
+   * sweep.freqs; // [100, 1000, 10000]
+   * sweep.voltage("out").map((v) => v.abs()); // [0.998, 0.8467, 0.1572]
+   * ```
+   */
   acSweep(options: AcSweepOptions): AcSweep {
     return acSweep(this.system, options);
   }
 
   /**
-   * Transient (time-domain) analysis.
+   * Transient (time-domain) analysis. Sources follow their netlist waveform,
+   * unless overridden with `inputs`.
    *
+   * @example
    * ```ts
-   * const tr = c.transient({ tStop: 5e-3, inputs: { V1: { kind: "step", v2: 5 } } });
-   * tr.time; tr.voltage("out"); tr.current("R1");
+   * const tr = c.transient({ tStop: 5e-3, inputs: { V1: { kind: "step", v1: 0, v2: 5 } } });
+   * tr.time.length; // 1001   (tStep defaults to tStop / 1000)
+   * tr.voltage("out").at(-1); // 5   (after 50 time constants)
+   * tr.current("R1"); // A, one value per time point
    * ```
    */
   transient(options: TransientOptions): TransientResult {
@@ -177,6 +302,13 @@ export class ElecMap {
   /**
    * Schematic geometry (grid units): placed components, routed wires, junctions.
    * Useful to build interactive views; {@link ElecMap.toSVG} renders it.
+   *
+   * @example
+   * ```ts
+   * const layout = c.layout();
+   * layout.components.map((p) => p.id); // ["V1", "R1", "C1"]
+   * layout.bounds; // { minX: -2, minY: -3, maxX: 16, maxY: 9 }
+   * ```
    */
   layout(): SchematicLayout {
     return layoutCircuit(this.compiled);
@@ -185,7 +317,9 @@ export class ElecMap {
   /**
    * Schematic as a standalone SVG string (IEC symbols by default).
    *
+   * @example
    * ```ts
+   * const svg = c.toSVG(); // '<svg xmlns="http://www.w3.org/2000/svg" class="elecmap" …'
    * c.toSVG({ style: "ansi", highlight: ["R1", "out"], theme: "light" });
    * ```
    */
@@ -199,6 +333,14 @@ export class ElecMap {
    *
    * - `"dc"` (default): DC value in volts;
    * - `{ freq }`: AC phasor at that frequency.
+   *
+   * @example
+   * ```ts
+   * c.voltage("out"); // 5
+   * c.voltage("in", "out"); // 0
+   * c.voltage("out", { freq: 1000 }).toString(); // "0.716956800325 - 0.450477243368j"
+   * c.voltage("out", { freq: 1000, input: "V1", amplitude: 2 }).abs(); // 1.693   (V1 driven at 2 V)
+   * ```
    */
   voltage(a: NodeName, at?: "dc"): number;
   voltage(a: NodeName, at: { freq: number } & AcExcitation): Complex;
@@ -221,6 +363,12 @@ export class ElecMap {
   /**
    * Current through a component, from its first node to its second node
    * (for an op-amp: current flowing into its output pin).
+   *
+   * @example
+   * ```ts
+   * c.current("R1"); // 0   (DC: the capacitor is open)
+   * c.current("C1", { freq: 1000 }).toString(); // "0.000283043199675 + 0.000450477243368j"
+   * ```
    */
   current(id: string, at?: "dc"): number;
   current(id: string, at: { freq: number } & AcExcitation): Complex;
@@ -233,10 +381,14 @@ export class ElecMap {
   /**
    * Transfer function `H(s) = output / input`, all other independent sources turned off.
    *
+   * @example
    * ```ts
-   * c.transferFunction("out");                              // V(out) / the only source
-   * c.transferFunction({ input: "V1", output: ["a", "b"] }); // V(a) − V(b) over V1
-   * c.transferFunction({ input: "I1", output: { current: "R2" } });
+   * const H = c.transferFunction("out"); // V(out) / the only source
+   * H.toLatex(); // "\frac{1}{1 + 10^{-4}\,s}"
+   * H.cutoffFrequency(); // 1591.55
+   *
+   * c.transferFunction({ input: "V1", output: ["in", "out"] }); // (V(in) − V(out)) / V1
+   * c.transferFunction({ input: "V1", output: { current: "R1" } }); // I(R1) / V1
    * ```
    */
   transferFunction(spec: OutputSpec | TransferOptions): TransferFunction {
@@ -250,9 +402,12 @@ export class ElecMap {
   /**
    * Literal transfer function, with the component names as symbols.
    *
+   * @example
    * ```ts
-   * c.symbolicTransferFunction("out").toLatex(); // \frac{1}{1 + R_{1} C_{1} s}
-   * c.symbolicTransferFunction({ output: "out", symbols: ["R1"] }); // others numeric
+   * const H = c.symbolicTransferFunction("out");
+   * H.toLatex(); // "\frac{1}{1 + R_{1} C_{1} s}"
+   * H.substitute({ C1: 200e-9 }).cutoffFrequency(); // 795.8
+   * c.symbolicTransferFunction({ output: "out", symbols: ["C1"] }); // R1 replaced by its value
    * ```
    */
   symbolicTransferFunction(spec: OutputSpec | SymbolicTransferOptions): SymbolicTransferFunction {
@@ -263,7 +418,14 @@ export class ElecMap {
     return symbolicTransferFunction(this.system, options);
   }
 
-  /** Literal impedance between two nodes (`b` defaults to ground), sources off. */
+  /**
+   * Literal impedance between two nodes (`b` defaults to ground), sources off.
+   *
+   * @example
+   * ```ts
+   * c.symbolicImpedance("out").toLatex(); // "\frac{R_{1}}{1 + R_{1} C_{1} s}"
+   * ```
+   */
   symbolicImpedance(
     a: NodeName,
     b?: NodeName,
@@ -277,12 +439,26 @@ export class ElecMap {
   /**
    * Impedance `Z(s)` between two nodes (`b` defaults to ground), all independent
    * sources off. It is a {@link TransferFunction}: `Z.evaluate(freq)`, `Z.toLatex()`…
+   *
+   * @example
+   * ```ts
+   * const Z = c.impedance("out"); // R1 ∥ C1 (V1 is turned off: a wire)
+   * Z.toLatex(); // "\frac{1000}{1 + 10^{-4}\,s}"
+   * Z.evaluate(1000).toString(); // "716.956800325 - 450.477243368j"
+   * ```
    */
   impedance(a: NodeName, b?: NodeName): TransferFunction {
     return impedance(this.system, a, b);
   }
 
-  /** Complex impedance (Ω) between two nodes at a frequency (Hz). */
+  /**
+   * Complex impedance (Ω) between two nodes at a frequency (Hz).
+   *
+   * @example
+   * ```ts
+   * c.equivalentImpedance("out", undefined, 1000).toString(); // "716.956800325 - 450.477243368j"
+   * ```
+   */
   equivalentImpedance(a: NodeName, b: NodeName | undefined, freq: number): Complex {
     return this.impedance(a, b).evaluate(freq);
   }
@@ -290,32 +466,80 @@ export class ElecMap {
   /**
    * Equivalent resistance (Ω) between two nodes.
    * @throws {@link ElecMapError} `NOT_HOMOGENEOUS` if the network is reactive (see {@link EquivalentOptions})
+   *
+   * @example
+   * ```ts
+   * new ElecMap("V1 in 0 1\nR1 in a 1k\nR2 a 0 1k").equivalentResistance("a"); // 500
+   *
+   * c.equivalentResistance("out"); // throws NOT_HOMOGENEOUS (R1 ∥ C1 is not a resistor)
+   * c.equivalentResistance("out", undefined, { mode: "dc" }); // 1000
+   * ```
    */
   equivalentResistance(a: NodeName, b?: NodeName, options?: EquivalentOptions): number {
     return equivalentResistance(this.impedance(a, b), options);
   }
 
-  /** Equivalent capacitance (F) between two nodes, for purely capacitive networks. */
+  /**
+   * Equivalent capacitance (F) between two nodes, for purely capacitive networks.
+   *
+   * @example
+   * ```ts
+   * new ElecMap("V1 in 0 AC 1\nC1 in a 100n\nC2 a 0 100n").equivalentCapacitance("a"); // 2e-7
+   * ```
+   */
   equivalentCapacitance(a: NodeName, b?: NodeName, options?: EquivalentOptions): number {
     return equivalentCapacitance(this.impedance(a, b), options);
   }
 
-  /** Equivalent inductance (H) between two nodes, for purely inductive networks. */
+  /**
+   * Equivalent inductance (H) between two nodes, for purely inductive networks.
+   *
+   * @example
+   * ```ts
+   * new ElecMap("V1 in 0 AC 1\nL1 in a 10m\nL2 a 0 22m").equivalentInductance("a"); // 0.006875
+   * ```
+   */
   equivalentInductance(a: NodeName, b?: NodeName, options?: EquivalentOptions): number {
     return equivalentInductance(this.impedance(a, b), options);
   }
 
-  /** Impedance `Z(s)` seen by an independent source (voltage / delivered current). */
+  /**
+   * Impedance `Z(s)` seen by an independent source (voltage / delivered current).
+   * The source can be omitted when the circuit has only one.
+   *
+   * @example
+   * ```ts
+   * c.inputImpedance("V1").toLatex(); // "\frac{10^{7} + 1000\,s}{s}"   (R1 + 1/(C1·s))
+   * ```
+   */
   inputImpedance(source?: string): TransferFunction {
     return inputImpedance(this.system, source ?? resolveSingleSource(this.compiled));
   }
 
-  /** Output impedance `Z(s)` at a node (alias of {@link impedance} to ground). */
+  /**
+   * Output impedance `Z(s)` at a node (alias of {@link impedance} to ground).
+   *
+   * @example
+   * ```ts
+   * c.outputImpedance("out").toLatex(); // "\frac{1000}{1 + 10^{-4}\,s}"
+   * ```
+   */
   outputImpedance(node: NodeName, reference?: NodeName): TransferFunction {
     return this.impedance(node, reference);
   }
 
-  /** Thévenin / Norton equivalent seen between two nodes (DC by default, or at `{ freq }`). */
+  /**
+   * Thévenin / Norton equivalent seen between two nodes (DC by default, or at `{ freq }`).
+   *
+   * @example
+   * ```ts
+   * c.thevenin("out");
+   * // { voltage: 5, resistance: 1000, current: 0.005, optimalLoad: 1000, maxPower: 0.00625 }
+   *
+   * c.thevenin("out", undefined, { freq: 1000 }).impedance.toString();
+   * // "716.956800325 - 450.477243368j"
+   * ```
+   */
   thevenin(a: NodeName, b?: NodeName, at?: "dc"): DcEquivalent;
   thevenin(a: NodeName, b: NodeName | undefined, at: { freq: number }): AcEquivalent;
   thevenin(
@@ -326,7 +550,14 @@ export class ElecMap {
     return at === "dc" ? theveninDc(this.system, a, b) : theveninAc(this.system, at.freq, a, b);
   }
 
-  /** Same as {@link thevenin}; the Norton current and impedance are part of the result. */
+  /**
+   * Same as {@link thevenin}; the Norton current and impedance are part of the result.
+   *
+   * @example
+   * ```ts
+   * c.norton("out").current; // 0.005   (A, short-circuit current)
+   * ```
+   */
   norton(a: NodeName, b?: NodeName, at?: "dc"): DcEquivalent;
   norton(a: NodeName, b: NodeName | undefined, at: { freq: number }): AcEquivalent;
   norton(
@@ -342,6 +573,16 @@ export class ElecMap {
   /**
    * Power absorbed by each component. DC (default): watts, sources delivering power
    * are negative. `{ freq }`: complex power `S = ½·V·I*` (W + j·var) for the AC sources.
+   *
+   * @example
+   * ```ts
+   * new ElecMap("V1 in 0 DC 10\nR1 in out 1k\nR2 out 0 4k").power();
+   * // { V1: -0.02, R1: 0.004, R2: 0.016 }
+   *
+   * const s = c.power({ freq: 1000 });
+   * s.R1.toString(); // "0.000141521599838"        (W)
+   * s.C1.toString(); // "0 - 0.000225238621684j"   (var)
+   * ```
    */
   power(at?: "dc"): Record<string, number>;
   power(at: { freq: number } & AcExcitation): Record<string, Complex>;
