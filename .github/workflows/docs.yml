@@ -1,9 +1,9 @@
 name: Docs
 
 # Publishes the typedoc API reference to GitHub Pages.
-# Manual until Pages is enabled (Settings → Pages → Source: GitHub Actions);
-# then add `push: branches: [main]`.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
