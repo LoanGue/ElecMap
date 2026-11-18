@@ -50,13 +50,41 @@ circuit.toJSON(); // { version: 1, ground: "0", components: [...] }
 - [Formats: netlist syntax, JSON document, validation codes](./docs/format.md)
 - [Component catalogue: ports, fields, sign conventions](./docs/components.md)
 
+## Analyses available today
+
+```ts
+import { ElecMap } from "elecmap";
+
+const c = new ElecMap(`
+V1 in 0 DC 5 AC 1
+R1 in out 1k
+C1 out 0 100n
+`);
+
+c.voltage("out"); // 5 (DC, volts)
+c.voltage("in", "out"); // 0 (between two nodes)
+c.current("R1"); // 0 (DC, amperes, first node → second node)
+
+const v = c.voltage("out", { freq: 1591.55 }); // AC phasor (Complex)
+v.abs(); // ≈ 0.707
+v.arg(); // ≈ −π/4
+
+c.current("C1", { freq: 1e3, input: "V1", amplitude: 2 }); // drive one source only
+c.acSweep({ fStart: 10, fStop: 1e6, points: 20 }).voltage("out"); // log sweep
+c.operatingPoint().nodeVoltages(); // { "0": 0, in: 5, out: 5 }
+c.power(); // DC power per component (W), sources negative
+c.setValue("R1", 2200); // parametric changes, caches invalidated
+```
+
+Supported components: R, C, L, coupled inductors (K), independent V/I sources, the four controlled sources (E, G, F, H), op-amps (ideal, finite gain, single-pole GBW) and fixed-state switches. See [algorithms](./docs/algorithms.md#modified-nodal-analysis) for how they are stamped.
+
 ## Roadmap
 
 1. ✅ Tooling & CI
 2. ✅ Math core (complex numbers, polynomials, linear solvers)
 3. ✅ Input formats (SPICE parser, JSON schema, validation)
-4. Linear components & Modified Nodal Analysis
-5. DC / AC analyses, `voltage` / `current`
+4. ✅ Linear components & Modified Nodal Analysis
+5. ✅ DC / AC analyses, `voltage` / `current`
 6. Numeric transfer functions
 7. Equivalent impedances, Thévenin / Norton, power
 8. Transient analysis
