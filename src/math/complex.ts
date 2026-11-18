@@ -1,3 +1,4 @@
+import { displayNumber } from "./display";
 /**
  * Immutable complex number `re + j·im`.
  *
@@ -109,8 +110,8 @@ export class Complex {
   }
 
   toString(): string {
-    if (this.im === 0) return `${this.re}`;
+    if (this.im === 0) return displayNumber(this.re);
     const sign = this.im < 0 ? "-" : "+";
-    return `${this.re} ${sign} ${Math.abs(this.im)}j`;
+    return `${displayNumber(this.re)} ${sign} ${displayNumber(Math.abs(this.im))}j`;
   }
 }

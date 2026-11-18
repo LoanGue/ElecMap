@@ -58,7 +58,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
-    "docs": "typedoc",
+    "docs": "tsx docs/site/build.ts",
     "check": "npm run lint && npm run format:check && npm run typecheck && npm test && npm run build",
     "changeset": "changeset",
     "release": "npm run build && changeset publish",

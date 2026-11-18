@@ -55,7 +55,7 @@ CI runs `check` on Node 22 and 24, plus `examples`, `docs` (warnings are errors)
 ## Adding a component
 
 1. Declare its JSON shape in `src/format/types.ts` and its SPICE syntax in `src/format/spice.ts` (parser and writer).
-2. Add it to the catalogue in `src/format/catalog.ts`, to the validation in `src/format/validate.ts` and to [docs/components.md](./docs/components.md).
+2. Add it to the catalogue in `src/format/catalog.ts`, to the validation in `src/format/validate.ts` and to [docs/components.md](./docs/en/components.md).
 3. Write its MNA model in `src/mna/models.ts`: stamps for DC/AC, companion model for transient, linear forms for currents.
 4. Give it a symbolic stamp in `src/symbolic/system.ts` and a symbol in `src/render`.
 5. Test it against an analytical result, and cross-check numeric vs symbolic in `tests/symbolic`.

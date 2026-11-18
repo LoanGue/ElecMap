@@ -333,6 +333,24 @@ export type FilterType =
 /**
  * A rational transfer function `H(s) = N(s) / D(s)` with real coefficients,
  * with frequency-domain helpers. Frequencies are in hertz, poles and zeros in rad/s.
+ *
+ * Get one from a circuit with {@link ElecMap.transferFunction}. The examples of
+ * this page use three circuits:
+ *
+ * ```ts
+ * import { ElecMap } from "elecmap";
+ *
+ * // RC low-pass, first order: H(s) = 1 / (1 + RC·s)
+ * const H = new ElecMap("V1 in 0 AC 1\nR1 in out 1k\nC1 out 0 100n").transferFunction("out");
+ *
+ * // Series RLC, second order (f0 = 1591.5 Hz, Q = 5)
+ * const G = new ElecMap("V1 in 0 AC 1\nR1 in a 20\nL1 a out 10m\nC1 out 0 1u").transferFunction("out");
+ *
+ * // Band-pass (154 Hz – 16.4 kHz)
+ * const bandPass = new ElecMap(
+ *   "V1 in 0 AC 1\nC1 in a 100n\nR1 a 0 10k\nR2 a out 10k\nC2 out 0 1n",
+ * ).transferFunction("out");
+ * ```
  */
 export class TransferFunction {
   /** `H(s)`, normalised so that the lowest-order denominator coefficient is 1. */
@@ -350,104 +368,248 @@ export class TransferFunction {
     this.meta = meta;
   }
 
-  /** Builds `H(s)` from ascending coefficient arrays: `[b0, b1, …] / [a0, a1, …]`. */
+  /**
+   * Builds `H(s)` from ascending coefficient arrays: `[b0, b1, …] / [a0, a1, …]`.
+   *
+   * @example
+   * ```ts
+   * const F = TransferFunction.fromCoefficients([0, 1], [1, 1e-3]); // s / (1 + 0.001·s)
+   * F.toLatex(); // "\frac{s}{1 + 0.001\,s}"
+   * F.filterType(); // "highpass"
+   * ```
+   */
   static fromCoefficients(num: readonly number[], den: readonly number[]): TransferFunction {
     return new TransferFunction(new Rational(new Polynomial(num), new Polynomial(den)));
   }
 
-  /** Numerator `N(s)`. */
+  /**
+   * Numerator `N(s)`.
+   *
+   * @example
+   * ```ts
+   * H.numerator.toString(); // "1"
+   * G.numerator.toString(); // "1"
+   * ```
+   */
   get numerator(): Polynomial {
     return this.rational.num;
   }
 
-  /** Denominator `D(s)`. */
+  /**
+   * Denominator `D(s)`.
+   *
+   * @example
+   * ```ts
+   * H.denominator.toString(); // "1 + 0.0001·s"
+   * G.denominator.toString(); // "1 + 0.00002·s + 1e-8·s^2"
+   * ```
+   */
   get denominator(): Polynomial {
     return this.rational.den;
   }
 
-  /** Order of the system (degree of the denominator). */
+  /**
+   * Order of the system (degree of the denominator).
+   *
+   * @example
+   * ```ts
+   * H.order; // 1
+   * G.order; // 2
+   * ```
+   */
   get order(): number {
     return Math.max(0, this.denominator.degree);
   }
 
-  /** `deg D − deg N` (negative for improper functions). */
+  /**
+   * `deg D − deg N` (negative for improper functions).
+   *
+   * @example
+   * ```ts
+   * H.relativeDegree; // 1   (|H| falls by 20 dB per decade at high frequency)
+   * ```
+   */
   get relativeDegree(): number {
     return this.numerator.isZero() ? Infinity : this.denominator.degree - this.numerator.degree;
   }
 
-  /** `H(s)` at a complex point. */
+  /**
+   * `H(s)` at a complex point.
+   *
+   * @example
+   * ```ts
+   * H.at(0).toString(); // "1"
+   * H.at(-5000).toString(); // "2"   (s = −5000 rad/s)
+   * ```
+   */
   at(s: Complex | number): Complex {
     return this.rational.evaluate(s);
   }
 
-  /** Frequency response `H(j·2πf)`. */
+  /**
+   * Frequency response `H(j·2πf)`.
+   *
+   * @example
+   * ```ts
+   * H.evaluate(1000).toString(); // "0.716956800325 - 0.450477243368j"   H(j·2π·1000)
+   * ```
+   */
   evaluate(freq: number): Complex {
     return this.at(new Complex(0, TWO_PI * freq));
   }
 
-  /** `|H(j·2πf)|`. */
+  /**
+   * `|H(j·2πf)|`.
+   *
+   * @example
+   * ```ts
+   * H.magnitude(1000); // 0.8467
+   * ```
+   */
   magnitude(freq: number): number {
     return this.evaluate(freq).abs();
   }
 
-  /** `20·log10 |H(j·2πf)|` (dB). */
+  /**
+   * `20·log10 |H(j·2πf)|` (dB).
+   *
+   * @example
+   * ```ts
+   * H.magnitudeDb(1000); // -1.445
+   * ```
+   */
   magnitudeDb(freq: number): number {
     return 20 * Math.log10(this.magnitude(freq));
   }
 
-  /** `arg H(j·2πf)` in degrees, in (−180, 180]. */
+  /**
+   * `arg H(j·2πf)` in degrees, in (−180, 180].
+   *
+   * @example
+   * ```ts
+   * H.phase(1000); // -32.14   (degrees)
+   * ```
+   */
   phase(freq: number): number {
     return (this.evaluate(freq).arg() * 180) / Math.PI;
   }
 
-  /** `lim H(s)` for `s → 0` (±Infinity for integrators). */
+  /**
+   * `lim H(s)` for `s → 0` (±Infinity for integrators).
+   *
+   * @example
+   * ```ts
+   * H.dcGain(); // 1
+   * TransferFunction.fromCoefficients([0, 1], [1, 1e-3]).dcGain(); // 0   (high-pass)
+   * ```
+   */
   dcGain(): number {
     return limitRatio(this.numerator, this.denominator, "low");
   }
 
-  /** `lim H(s)` for `s → ∞` (±Infinity for improper functions). */
+  /**
+   * `lim H(s)` for `s → ∞` (±Infinity for improper functions).
+   *
+   * @example
+   * ```ts
+   * H.highFrequencyGain(); // 0
+   * TransferFunction.fromCoefficients([0, 1], [1, 1e-3]).highFrequencyGain(); // 1000
+   * ```
+   */
   highFrequencyGain(): number {
     return limitRatio(this.numerator, this.denominator, "high");
   }
 
-  /** Poles (rad/s), sorted by magnitude. */
+  /**
+   * Poles (rad/s), sorted by magnitude.
+   *
+   * @example
+   * ```ts
+   * H.poles().map(String); // ["-10000"]   (rad/s, = −1/RC)
+   * G.poles().map(String); // ["-1000 - 9949.87437107j", "-1000 + 9949.87437107j"]
+   * ```
+   */
   poles(): Complex[] {
     return [
       ...(this.polesCache ??= this.denominator.degree > 0 ? polynomialRoots(this.denominator) : []),
     ];
   }
 
-  /** Zeros (rad/s), sorted by magnitude. */
+  /**
+   * Zeros (rad/s), sorted by magnitude.
+   *
+   * @example
+   * ```ts
+   * G.zeros(); // []
+   * ```
+   */
   zeros(): Complex[] {
     return [
       ...(this.zerosCache ??= this.numerator.degree > 0 ? polynomialRoots(this.numerator) : []),
     ];
   }
 
-  /** True if every pole has a strictly negative real part. */
+  /**
+   * True if every pole has a strictly negative real part.
+   *
+   * @example
+   * ```ts
+   * G.isStable(); // true
+   * ```
+   */
   isStable(): boolean {
     return this.poles().every((p) => p.re < -1e-12 * Math.max(1, p.abs()));
   }
 
-  /** Time constants `τ = −1/Re(p)` (s) of the stable poles, one per real pole or conjugate pair. */
+  /**
+   * Time constants `τ = −1/Re(p)` (s) of the stable poles, one per real pole or conjugate pair.
+   *
+   * @example
+   * ```ts
+   * H.timeConstants(); // [0.0001]   (s, = RC)
+   * G.timeConstants(); // [0.001]
+   * ```
+   */
   timeConstants(): number[] {
     return this.poles()
       .filter((p) => p.re < 0 && p.im >= 0)
       .map((p) => -1 / p.re);
   }
 
-  /** Natural frequency (Hz) of the dominant complex pole pair, or of a second-order real-pole system. */
+  /**
+   * Natural frequency (Hz) of the dominant complex pole pair, or of a second-order real-pole system.
+   *
+   * @example
+   * ```ts
+   * G.naturalFrequency(); // 1591.55   (Hz, 1 / (2π·√(LC)))
+   * H.naturalFrequency(); // undefined   (first order)
+   * ```
+   */
   naturalFrequency(): number | undefined {
     const pair = this.dominantPair();
     return pair && pair.omega0 / TWO_PI;
   }
 
-  /** Quality factor of the dominant pole pair (see {@link naturalFrequency}). */
+  /**
+   * Quality factor of the dominant pole pair (see {@link naturalFrequency}).
+   *
+   * @example
+   * ```ts
+   * G.qFactor(); // 5
+   * ```
+   */
   qFactor(): number | undefined {
     return this.dominantPair()?.q;
   }
 
-  /** Damping ratio `ζ = 1 / (2Q)` of the dominant pole pair. */
+  /**
+   * Damping ratio `ζ = 1 / (2Q)` of the dominant pole pair.
+   *
+   * @example
+   * ```ts
+   * G.dampingRatio(); // 0.1
+   * ```
+   */
   dampingRatio(): number | undefined {
     const q = this.qFactor();
     return q === undefined ? undefined : 1 / (2 * q);
@@ -470,7 +632,14 @@ export class TransferFunction {
     return undefined;
   }
 
-  /** Default frequency range (Hz) covering every pole and zero. */
+  /**
+   * Default frequency range (Hz) covering every pole and zero.
+   *
+   * @example
+   * ```ts
+   * H.frequencyRange(); // [15.92, 159155]   (Hz, two decades around the pole)
+   * ```
+   */
   frequencyRange(decadesAround = 2): [number, number] {
     const mags = [...this.poles(), ...this.zeros()].map((r) => r.abs()).filter((m) => m > 0);
     if (mags.length === 0) return [1, 1e6];
@@ -479,7 +648,18 @@ export class TransferFunction {
     return [lo / 10 ** decadesAround, hi * 10 ** decadesAround];
   }
 
-  /** Bode diagram: magnitude (linear and dB) and unwrapped phase over a log sweep. */
+  /**
+   * Bode diagram: magnitude (linear and dB) and unwrapped phase over a log sweep.
+   *
+   * @example
+   * ```ts
+   * const bode = H.bode({ fStart: 100, fStop: 10e3, points: 1 }); // 1 point per decade
+   * bode.freq; // [100, 1000, 10000]
+   * bode.magnitudeDb; // [-0.017, -1.445, -16.07]
+   * bode.phase; // [-3.6, -32.1, -81.0]
+   * bode.magnitude; // linear |H|
+   * ```
+   */
   bode(options: BodeOptions = {}): BodePlot {
     const [defStart, defStop] = this.frequencyRange();
     const freq = logGrid(
@@ -510,7 +690,15 @@ export class TransferFunction {
     return { freq, magnitude, magnitudeDb: magnitude.map((m) => 20 * Math.log10(m)), phase };
   }
 
-  /** Classifies the magnitude response (low-pass, high-pass, band-pass…). */
+  /**
+   * Classifies the magnitude response (low-pass, high-pass, band-pass…).
+   *
+   * @example
+   * ```ts
+   * H.filterType(); // "lowpass"
+   * TransferFunction.fromCoefficients([0, 1], [1, 1e-3]).filterType(); // "highpass"
+   * ```
+   */
   filterType(): FilterType {
     if (this.numerator.isZero()) return "other";
     if (this.order === 0 && this.numerator.degree <= 0) return "flat";
@@ -561,12 +749,26 @@ export class TransferFunction {
     return { peak, peakFreq, min };
   }
 
-  /** Frequency (Hz) of the maximum of `|H|`. */
+  /**
+   * Frequency (Hz) of the maximum of `|H|`.
+   *
+   * @example
+   * ```ts
+   * G.peakFrequency(); // 1575.6   (Hz, resonance)
+   * ```
+   */
   peakFrequency(): number {
     return this.extremes().peakFreq;
   }
 
-  /** Maximum of `|H|`. */
+  /**
+   * Maximum of `|H|`.
+   *
+   * @example
+   * ```ts
+   * G.peakGain(); // 5.025
+   * ```
+   */
   peakGain(): number {
     return this.extremes().peak;
   }
@@ -574,6 +776,12 @@ export class TransferFunction {
   /**
    * −3 dB frequencies (Hz): where `|H|` crosses `reference / √2`. The reference is the DC
    * gain (low-pass, band-stop), the high-frequency gain (high-pass) or the peak (band-pass).
+   *
+   * @example
+   * ```ts
+   * H.cutoffFrequencies(); // [1591.55]
+   * bandPass.cutoffFrequencies(); // [154.6, 16388]
+   * ```
    */
   cutoffFrequencies(): number[] {
     const type = this.filterType();
@@ -606,13 +814,28 @@ export class TransferFunction {
     return out;
   }
 
-  /** The −3 dB frequency (Hz) of a low-pass or high-pass response. */
+  /**
+   * The −3 dB frequency (Hz) of a low-pass or high-pass response.
+   *
+   * @example
+   * ```ts
+   * H.cutoffFrequency(); // 1591.55   (Hz, = 1 / (2πRC))
+   * ```
+   */
   cutoffFrequency(): number | undefined {
     const f = this.cutoffFrequencies();
     return f.length === 1 ? f[0] : undefined;
   }
 
-  /** −3 dB bandwidth (Hz) of a band-pass or band-stop response. */
+  /**
+   * −3 dB bandwidth (Hz) of a band-pass or band-stop response.
+   *
+   * @example
+   * ```ts
+   * bandPass.bandwidth(); // 16234   (Hz)
+   * H.bandwidth(); // undefined   (low-pass)
+   * ```
+   */
   bandwidth(): number | undefined {
     const f = this.cutoffFrequencies();
     if (f.length !== 2) return undefined;
@@ -625,6 +848,17 @@ export class TransferFunction {
    * ```ts
    * H.apply({ amplitude: 1, freq: 1e3 });              // one sine
    * H.apply({ offset: 2.5, components: [s1, s2] });    // DC + harmonics
+   * ```
+   *
+   * @example
+   * ```ts
+   * const y = H.apply({ amplitude: 2, freq: 1000 });
+   * y.components[0].amplitude; // 1.693
+   * y.components[0].phase; // -32.14   (degrees)
+   * y.at(0.25e-3); // 1.434   (value at t = 0.25 ms)
+   *
+   * H.apply({ offset: 1, components: [{ amplitude: 1, freq: 100 }, { amplitude: 1, freq: 1e4 }] });
+   * // offset 1, amplitudes [0.998, 0.157]
    * ```
    */
   apply(signal: InputSignal): SteadyStateResponse {
@@ -662,6 +896,14 @@ export class TransferFunction {
   /**
    * Unit step response `y(t)` for zero initial state (exact discretisation,
    * `e^{A·h}`). Default duration from the poles; `amplitude` scales the step.
+   *
+   * @example
+   * ```ts
+   * const step = H.stepResponse({ tStop: 5e-4, points: 5 });
+   * step.time; // [0, 0.0001, 0.0002, 0.0003, 0.0004, 0.0005]
+   * step.value; // [0, 0.632, 0.865, 0.950, 0.982, 0.993]   (1 − e^(−t/RC))
+   * H.stepResponse({ amplitude: 5 }); // 5 V step
+   * ```
    */
   stepResponse(options: ResponseOptions & { amplitude?: number } = {}): TimeResponse {
     const r = simulateResponse(
@@ -674,7 +916,14 @@ export class TransferFunction {
     return r;
   }
 
-  /** Impulse response `h(t)`; a direct feed-through term is reported as `impulse` (Dirac weight). */
+  /**
+   * Impulse response `h(t)`; a direct feed-through term is reported as `impulse` (Dirac weight).
+   *
+   * @example
+   * ```ts
+   * H.impulseResponse({ tStop: 2e-4, points: 3 }).value; // [10000, 5134.2, 2636.0, 1353.4]
+   * ```
+   */
   impulseResponse(options: ResponseOptions = {}): TimeResponse {
     return impulseResponseOf(this.numerator, this.denominator, options, this.defaultDuration());
   }
@@ -683,6 +932,15 @@ export class TransferFunction {
    * Time response to an arbitrary input for zero initial state: a waveform
    * (`{ kind: "pulse", … }`), a function of time or samples on the time grid.
    * The input is held constant over each step (exact for piecewise constant inputs).
+   *
+   * @example
+   * ```ts
+   * const square = (t: number) => (Math.floor(t / 1e-3) % 2 === 0 ? 1 : 0);
+   * const y = H.response(square, { tStop: 4e-3, points: 400 });
+   * y.time; y.value; // includes the start-up transient
+   *
+   * H.response([0, 1, 1, 1], { tStep: 1e-4 }); // samples, one every 0.1 ms
+   * ```
    */
   response(input: Signal | readonly number[], options: ResponseOptions = {}): TimeResponse {
     return simulateResponse(
@@ -694,12 +952,30 @@ export class TransferFunction {
     );
   }
 
-  /** Rise time, overshoot, peak and 2 % settling time of the step response. */
+  /**
+   * Rise time, overshoot, peak and 2 % settling time of the step response.
+   *
+   * @example
+   * ```ts
+   * G.stepInfo();
+   * // { finalValue: 1, peak: 1.7286, peakTime: 0.00032, overshoot: 72.86,
+   * //   riseTime: 0.000111, settlingTime: 0.00384 }
+   * ```
+   */
   stepInfo(options: ResponseOptions = {}): StepMetrics {
     return stepMetrics(this.stepResponse(options), this.dcGain());
   }
 
-  /** LaTeX of `H(s)` with numeric coefficients, e.g. `\frac{1}{1 + 10^{-4}\,s}`. */
+  /**
+   * LaTeX of `H(s)` with numeric coefficients, e.g. `\frac{1}{1 + 10^{-4}\,s}`.
+   *
+   * @example
+   * ```ts
+   * H.toLatex(); // "\frac{1}{1 + 10^{-4}\,s}"
+   * H.toLatex({ name: "H(s)", normalize: "monic" }); // "H(s) = \frac{10^{4}}{s + 10^{4}}"
+   * G.toLatex({ normalize: "monic" }); // "\frac{10^{8}}{s^{2} + 2000\,s + 10^{8}}"
+   * ```
+   */
   toLatex(options: TransferLatexOptions = {}): string {
     const mode = options.normalize ?? "constant";
     const r = mode === "none" ? this.rational : this.rational.normalize(mode);
@@ -720,7 +996,14 @@ export class TransferFunction {
     return options.name ? `${options.name} = ${body}` : body;
   }
 
-  /** Plain-text representation. */
+  /**
+   * Plain-text representation.
+   *
+   * @example
+   * ```ts
+   * H.toString(); // "V(out)/V1: (1) / (1 + 0.0001·s)"
+   * ```
+   */
   toString(): string {
     const label =
       this.meta.output && this.meta.input ? `${this.meta.output}/${this.meta.input}: ` : "";

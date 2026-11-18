@@ -3,15 +3,53 @@
   "entryPoints": ["src/index.ts"],
   "out": "docs/api",
   "name": "ElecMap",
-  "readme": "README.md",
-  "projectDocuments": ["docs/format.md", "docs/components.md", "docs/algorithms.md"],
+  "plugin": ["./docs/site/typedoc-plugin.mjs"],
+  "readme": "docs/en/home.md",
   "excludePrivate": true,
   "excludeInternal": true,
-  "sort": ["kind", "instance-first", "alphabetical-ignoring-documents"],
-  "navigationLinks": {
-    "GitHub": "https://github.com/LoanGue/ElecMap",
-    "npm": "https://www.npmjs.com/package/elecmap"
+  "categorizeByGroup": false,
+  "categoryOrder": [
+    "Guides",
+    "Reference",
+    "Circuit",
+    "DC & AC analyses",
+    "Transfer functions",
+    "Literal transfer functions",
+    "Equivalents",
+    "Time domain",
+    "Schematics",
+    "Circuit JSON",
+    "SPICE, units & LaTeX",
+    "Math",
+    "Internals",
+    "*"
+  ],
+  "groupOrder": [
+    "Creating a circuit",
+    "Circuit description",
+    "Voltages, currents & power",
+    "Transfer functions",
+    "Impedances & equivalents",
+    "Time domain",
+    "Schematic",
+    "*"
+  ],
+  "navigation": {
+    "includeCategories": true,
+    "includeGroups": false,
+    "includeFolders": false
   },
-  "validation": { "notExported": true, "invalidLink": true, "notDocumented": false },
-  "treatWarningsAsErrors": true
+  "sort": ["kind", "instance-first", "alphabetical-ignoring-documents"],
+  "validation": {
+    "notExported": true,
+    "invalidLink": true,
+    "notDocumented": false
+  },
+  "treatWarningsAsErrors": true,
+  "customCss": "docs/site/theme.css",
+  "customJs": "docs/site/theme.js",
+  "headings": {
+    "readme": false,
+    "document": false
+  }
 }

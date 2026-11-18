@@ -41,5 +41,8 @@ describe("Complex", () => {
   it("formats with j notation", () => {
     expect(new Complex(1, -2).toString()).toBe("1 - 2j");
     expect(new Complex(3).toString()).toBe("3");
+    expect(new Complex(-1000.0000000000003, 9949.8743710662).toString()).toBe(
+      "-1000 + 9949.87437107j",
+    );
   });
 });
