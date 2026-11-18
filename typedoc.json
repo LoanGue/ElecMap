@@ -4,5 +4,14 @@
   "out": "docs/api",
   "name": "ElecMap",
   "readme": "README.md",
-  "excludePrivate": true
+  "projectDocuments": ["docs/format.md", "docs/components.md", "docs/algorithms.md"],
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "sort": ["kind", "instance-first", "alphabetical-ignoring-documents"],
+  "navigationLinks": {
+    "GitHub": "https://github.com/LoanGue/ElecMap",
+    "npm": "https://www.npmjs.com/package/elecmap"
+  },
+  "validation": { "notExported": true, "invalidLink": true, "notDocumented": false },
+  "treatWarningsAsErrors": true
 }

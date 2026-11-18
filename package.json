@@ -62,7 +62,9 @@
     "check": "npm run lint && npm run format:check && npm run typecheck && npm test && npm run build",
     "changeset": "changeset",
     "release": "npm run build && changeset publish",
-    "prepublishOnly": "npm run check"
+    "prepublishOnly": "npm run check",
+    "examples": "node scripts/run-examples.mjs",
+    "test:pack": "npm run build && node scripts/smoke-pack.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.3",
