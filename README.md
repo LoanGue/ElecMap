@@ -31,11 +31,30 @@ circuit.current("R1", { freq: 1000 });
 circuit.toSVG();
 ```
 
+## Circuit input
+
+Circuits are described with a standard **SPICE netlist** or with the canonical **JSON format**; both compile to the same immutable, validated circuit:
+
+```ts
+import { compile } from "elecmap";
+
+const circuit = compile(`
+V1 in 0 AC 1
+R1 in out 4k7
+C1 out 0 100n
+`);
+circuit.nodes; // ["in", "out"]
+circuit.toJSON(); // { version: 1, ground: "0", components: [...] }
+```
+
+- [Formats: netlist syntax, JSON document, validation codes](./docs/format.md)
+- [Component catalogue: ports, fields, sign conventions](./docs/components.md)
+
 ## Roadmap
 
 1. ✅ Tooling & CI
 2. ✅ Math core (complex numbers, polynomials, linear solvers)
-3. Input formats (SPICE parser, JSON schema, validation)
+3. ✅ Input formats (SPICE parser, JSON schema, validation)
 4. Linear components & Modified Nodal Analysis
 5. DC / AC analyses, `voltage` / `current`
 6. Numeric transfer functions

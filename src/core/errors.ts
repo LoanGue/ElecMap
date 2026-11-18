@@ -14,7 +14,15 @@ export type ElecMapErrorCode =
   /** Division by a zero polynomial or by zero. */
   | "DIVISION_BY_ZERO"
   /** An iterative algorithm failed to converge. */
-  | "NO_CONVERGENCE";
+  | "NO_CONVERGENCE"
+  /** The netlist or JSON input could not be parsed. */
+  | "PARSE_ERROR"
+  /** The circuit is structurally invalid (see `details.issues`). */
+  | "INVALID_CIRCUIT"
+  /** A referenced component or node does not exist. */
+  | "NOT_FOUND"
+  /** The feature is not supported (yet). */
+  | "UNSUPPORTED";
 
 /** Error thrown by every ElecMap API. Inspect {@link ElecMapError.code} to react programmatically. */
 export class ElecMapError extends Error {
