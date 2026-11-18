@@ -24,8 +24,8 @@ C1 out 0 100n
 `);
 
 const H = circuit.transferFunction({ input: "V1", output: ["out", "0"] });
-H.toLatex();              // \frac{1}{1 + 10^{-4} s}
-H.evaluate(1591.5);       // |H| ≈ 0.707, phase ≈ -45°
+H.toLatex(); // \frac{1}{1 + 10^{-4} s}
+H.evaluate(1591.5); // |H| ≈ 0.707, phase ≈ -45°
 circuit.voltage("in", "out", { freq: 1000 });
 circuit.current("R1", { freq: 1000 });
 circuit.toSVG();
@@ -44,6 +44,15 @@ circuit.toSVG();
 9. SVG rendering
 10. Symbolic transfer functions
 11. Non-linear components (diodes, BJT, MOSFET)
+
+## Development
+
+```sh
+npm install
+npm run check   # lint, format, type-check, tests, build
+```
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full workflow.
 
 ## License
 
