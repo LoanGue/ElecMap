@@ -99,6 +99,7 @@ export class RealLU {
 export class ComplexLU {
   private readonly lu: Complex[][];
   private readonly perm: number[];
+  private sign = 1;
   /** Size of the system. */
   readonly n: number;
 
@@ -132,6 +133,7 @@ export class ComplexLU {
       if (p !== k) {
         [this.lu[k], this.lu[p]] = [this.lu[p] as Complex[], this.lu[k] as Complex[]];
         [this.perm[k], this.perm[p]] = [this.perm[p] as number, this.perm[k] as number];
+        this.sign = -this.sign;
       }
       const rowK = this.lu[k] as Complex[];
       const pivot = rowK[k] as Complex;
@@ -144,6 +146,13 @@ export class ComplexLU {
           rowI[j] = (rowI[j] as Complex).sub(f.mul(rowK[j] as Complex));
       }
     }
+  }
+
+  /** Determinant of the factorised matrix. */
+  determinant(): Complex {
+    let det = new Complex(this.sign);
+    for (let i = 0; i < this.n; i++) det = det.mul((this.lu[i] as Complex[])[i] as Complex);
+    return det;
   }
 
   /** Solves `A·x = b`. */

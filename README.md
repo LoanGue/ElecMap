@@ -76,6 +76,27 @@ c.power(); // DC power per component (W), sources negative
 c.setValue("R1", 2200); // parametric changes, caches invalidated
 ```
 
+### Transfer functions
+
+```ts
+const H = c.transferFunction("out"); // V(out) / V1 (the only AC source)
+// or: c.transferFunction({ input: "V1", output: ["a", "b"] }), output: { current: "R2" }
+
+H.toLatex(); // "\frac{1}{1 + 10^{-4}\,s}"
+H.toLatex({ name: "H(s)", normalize: "monic" }); // "H(s) = \frac{10^{4}}{s + 10^{4}}"
+H.evaluate(1e3); // Complex H(j·2π·1 kHz)
+(H.magnitudeDb(1e3), H.phase(1e3)); // dB, degrees
+H.apply({ amplitude: 2, freq: 1e3, phase: 0 }); // steady-state output sine(s), .at(t)
+H.bode({ fStart: 10, fStop: 1e6 }); // { freq, magnitude, magnitudeDb, phase (unwrapped) }
+(H.poles(), H.zeros(), H.isStable(), H.timeConstants());
+(H.dcGain(), H.highFrequencyGain(), H.order);
+H.filterType(); // "lowpass" | "highpass" | "bandpass" | "bandstop" | "allpass" | "flat" | "other"
+(H.cutoffFrequency(), H.cutoffFrequencies(), H.bandwidth(), H.peakFrequency());
+(H.naturalFrequency(), H.qFactor(), H.dampingRatio());
+```
+
+A runnable example lives in [`examples/rc-lowpass.ts`](./examples/rc-lowpass.ts).
+
 Supported components: R, C, L, coupled inductors (K), independent V/I sources, the four controlled sources (E, G, F, H), op-amps (ideal, finite gain, single-pole GBW) and fixed-state switches. See [algorithms](./docs/algorithms.md#modified-nodal-analysis) for how they are stamped.
 
 ## Roadmap
@@ -85,7 +106,7 @@ Supported components: R, C, L, coupled inductors (K), independent V/I sources, t
 3. ✅ Input formats (SPICE parser, JSON schema, validation)
 4. ✅ Linear components & Modified Nodal Analysis
 5. ✅ DC / AC analyses, `voltage` / `current`
-6. Numeric transfer functions
+6. ✅ Numeric transfer functions
 7. Equivalent impedances, Thévenin / Norton, power
 8. Transient analysis
 9. SVG rendering

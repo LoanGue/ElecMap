@@ -9,6 +9,8 @@ import type { DcOptions } from "./analysis/dc";
 import { acAnalysis, acSweep } from "./analysis/ac";
 import type { AcExcitation, AcSweep, AcSweepOptions } from "./analysis/ac";
 import type { AcSolution, DcSolution } from "./analysis/solution";
+import { transferFunction } from "./analysis/transfer";
+import type { OutputSpec, TransferFunction, TransferOptions } from "./analysis/transfer";
 
 /** Analysis point for {@link ElecMap.voltage} / {@link ElecMap.current}. */
 export type AnalysisPoint = "dc" | ({ freq: number } & AcExcitation);
@@ -175,6 +177,23 @@ export class ElecMap {
     if (at === "dc") return this.operatingPoint().current(id);
     const { freq, ...excitation } = at;
     return this.ac(freq, excitation).current(id);
+  }
+
+  /**
+   * Transfer function `H(s) = output / input`, all other independent sources turned off.
+   *
+   * ```ts
+   * c.transferFunction("out");                              // V(out) / the only source
+   * c.transferFunction({ input: "V1", output: ["a", "b"] }); // V(a) − V(b) over V1
+   * c.transferFunction({ input: "I1", output: { current: "R2" } });
+   * ```
+   */
+  transferFunction(spec: OutputSpec | TransferOptions): TransferFunction {
+    const options: TransferOptions =
+      typeof spec === "object" && !Array.isArray(spec) && "output" in spec
+        ? (spec as TransferOptions)
+        : { output: spec as OutputSpec };
+    return transferFunction(this.system, options);
   }
 
   /** DC power absorbed by each component (W); sources delivering power are negative. */
