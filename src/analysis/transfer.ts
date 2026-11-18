@@ -9,6 +9,9 @@ import { polynomialRoots } from "../math/roots";
 import type { LinearForm } from "../mna/models";
 import type { MnaSystem, SourceValues } from "../mna/system";
 import { singleSource } from "../mna/system";
+import type { ResponseOptions, StepMetrics, TimeResponse } from "./response";
+import { defaultDuration, impulseResponseOf, simulateResponse, stepMetrics } from "./response";
+import type { Signal } from "./waveforms";
 
 // ------------------------------------------------------------------ specs
 
@@ -649,6 +652,51 @@ export class TransferFunction {
         dc,
       );
     return { offset: dc, components: out, at, sample: (times) => times.map(at) };
+  }
+
+  /** Default simulation length for time responses, from the poles. */
+  private defaultDuration(): number {
+    return defaultDuration(this.poles());
+  }
+
+  /**
+   * Unit step response `y(t)` for zero initial state (exact discretisation,
+   * `e^{A·h}`). Default duration from the poles; `amplitude` scales the step.
+   */
+  stepResponse(options: ResponseOptions & { amplitude?: number } = {}): TimeResponse {
+    const r = simulateResponse(
+      this.numerator,
+      this.denominator,
+      options.amplitude ?? 1,
+      options,
+      this.defaultDuration(),
+    );
+    return r;
+  }
+
+  /** Impulse response `h(t)`; a direct feed-through term is reported as `impulse` (Dirac weight). */
+  impulseResponse(options: ResponseOptions = {}): TimeResponse {
+    return impulseResponseOf(this.numerator, this.denominator, options, this.defaultDuration());
+  }
+
+  /**
+   * Time response to an arbitrary input for zero initial state: a waveform
+   * (`{ kind: "pulse", … }`), a function of time or samples on the time grid.
+   * The input is held constant over each step (exact for piecewise constant inputs).
+   */
+  response(input: Signal | readonly number[], options: ResponseOptions = {}): TimeResponse {
+    return simulateResponse(
+      this.numerator,
+      this.denominator,
+      input,
+      options,
+      this.defaultDuration(),
+    );
+  }
+
+  /** Rise time, overshoot, peak and 2 % settling time of the step response. */
+  stepInfo(options: ResponseOptions = {}): StepMetrics {
+    return stepMetrics(this.stepResponse(options), this.dcGain());
   }
 
   /** LaTeX of `H(s)` with numeric coefficients, e.g. `\frac{1}{1 + 10^{-4}\,s}`. */

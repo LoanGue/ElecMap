@@ -57,3 +57,17 @@ Poles and zeros come from the Aberth–Ehrlich solver. Cutoff frequencies are fo
 - **R / L / C equivalents** check the shape of `Z(s)`: constant (R), `1/(C·s)` (C), `L·s` (L); otherwise `NOT_HOMOGENEOUS` is thrown, unless `mode: "dc"` (Z(0)) or `mode: "freq"` (value of the equivalent component at one frequency) is requested.
 - **Thévenin:** `Vth` is the open-circuit voltage (DC operating point or AC phasor), `Zth = Z(a, b)`; Norton follows as `In = Vth / Zth`. Maximum power transfer uses `R = Rth` (DC) or the conjugate match `Z = Zth*` (AC, `P = |Vth|² / 8·Re Zth` for peak phasors).
 - **Input impedance** of a voltage source is `−V / I(V)` (SPICE current convention), of a current source the impedance between its terminals.
+
+## Time domain
+
+**Transient analysis** integrates `C·x' + G·x = b(t)` with a fixed step `h`. The first step is backward Euler, the following ones use the chosen method:
+
+| method            | update                                             | notes                                                   |
+| ----------------- | -------------------------------------------------- | ------------------------------------------------------- |
+| `gear2` (default) | `(3/2h·C + G)·xₙ₊₁ = bₙ₊₁ + C·(4xₙ − xₙ₋₁)/2h`     | 2nd order, L-stable: no ringing after discontinuities   |
+| `trap`            | `(C/h + G/2)·xₙ₊₁ = (bₙ₊₁ + bₙ − G·xₙ)/2 + C·xₙ/h` | 2nd order, conserves the energy of lossless LC circuits |
+| `euler`           | `(C/h + G)·xₙ₊₁ = bₙ₊₁ + C·xₙ/h`                   | 1st order, strongly damped                              |
+
+The step matrix is factorised once. The initial state is the DC operating point with the sources at `t = 0`, or, with initial conditions, the charges `C·x(0)` built from the `IC=` values; consistent algebraic unknowns are then obtained with a vanishing backward-Euler step. Currents of capacitors and inductors' voltages use the derivative `x'`, estimated by second-order backward differences.
+
+**Responses of a transfer function** (`stepResponse`, `impulseResponse`, `response`) are exact: `H(s)` is turned into a controllable canonical state-space model (time-scaled by `σ`, the geometric mean of the poles' magnitudes, for conditioning), discretised with the matrix exponential of the augmented matrix `[[A, B], [0, 0]]·h` (scaling and squaring, Padé 13 — Higham 2005). Inputs are held constant over a step, so steps and piecewise-constant inputs are exact, and smooth inputs have an `O(h)` error.

@@ -33,3 +33,8 @@ export {
   theveninAc,
 } from "./equivalent";
 export type { EquivalentOptions, DcEquivalent, AcEquivalent } from "./equivalent";
+export { transient, TransientResult } from "./transient";
+export type { TransientOptions } from "./transient";
+export { waveformValue, signalValue, sourceSignal } from "./waveforms";
+export type { Signal, WaveformContext } from "./waveforms";
+export type { ResponseOptions, StepMetrics, TimeResponse } from "./response";
