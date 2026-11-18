@@ -35,3 +35,17 @@ Every analysis works on the system `(G + s·C)·x = b`, assembled once per circu
 The same matrices are evaluated at `s = 0` (DC, real LU), `s = jω` (AC, complex LU) or kept as a polynomial matrix in `s` (transfer functions). Any quantity (voltage between two nodes, current through a component) is a _linear form_ `Σ (g + s·c)·x` evaluated on the solution.
 
 When the DC system is singular because a node has no DC path (behind series capacitors), a `gmin = 1e-12 S` conductance to ground is added, as in SPICE; `DcSolution.gminUsed` reports it.
+
+## Transfer functions
+
+`H(s) = y(s) / u` (output linear form `y`, single input source `u`) is obtained as `N(s) / D(s)` with `D(s) = det(G + s·C)` and `N(s) = y(s)·D(s)` (Cramer's rule).
+
+Expanding a polynomial determinant directly loses accuracy in floating point when component values span many decades (1 Ω with 1 mF next to 1 MΩ with 1 pF). ElecMap instead:
+
+1. picks a **frequency scale** `σ` (geometric mean of the static/dynamic entry ratios, refined from the poles of a first pass);
+2. **samples** `D` and `N` at `m = n + 1` points `s = σ·e^{iθₖ}` on a circle, each sample being one complex LU factorisation (determinant + solve);
+3. recovers the coefficients with a **discrete Fourier transform**, which is perfectly conditioned on the unit circle, then rescales `p = s/σ`;
+4. **cancels** pole/zero pairs that coincide (modes that the input cannot excite or the output cannot see), so `order` is the true order;
+5. normalises the denominator to `1 + a₁s + …`.
+
+Poles and zeros come from the Aberth–Ehrlich solver. Cutoff frequencies are found by bisection in log-frequency on `|H| = ref/√2`, the peak by golden-section search.

@@ -72,3 +72,13 @@ describe("linear solvers", () => {
     expect(() => new ComplexLU([[Complex.ZERO]])).toThrow(/singular/);
   });
 });
+
+describe("ComplexLU.determinant", () => {
+  it("includes the permutation sign", () => {
+    const lu = new ComplexLU([
+      [new Complex(0), new Complex(2)],
+      [new Complex(3), new Complex(0, 1)],
+    ]);
+    expect(lu.determinant().equals(new Complex(-6), 1e-15)).toBe(true);
+  });
+});

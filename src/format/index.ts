@@ -7,3 +7,5 @@ export type { ValidationIssue, IssueCode, IssueSeverity } from "./validate";
 export { COMPONENT_CATALOG } from "./catalog";
 export type { ComponentSpec, NumberConstraint } from "./catalog";
 export { CIRCUIT_SCHEMA } from "./schema";
+export { latexNumber, polynomialToLatex } from "./latex";
+export type { LatexNumberOptions, LatexPolynomialOptions } from "./latex";
