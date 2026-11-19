@@ -10,5 +10,5 @@ describe("examples", () => {
     spy.mockRestore();
     expect(lines[0]).toBe(String.raw`H(s) = \frac{1}{1 + 10^{-4}\,s}`);
     expect(lines.join("\n")).toContain("type: lowpass | fc = 1591.5 Hz");
-  });
+  }, 30_000); // the import compiles the whole source tree
 });

@@ -93,6 +93,49 @@ A bare number after the nodes of a source is its DC value (`V1 a 0 5`). Phases a
 - `nodes` follow the port order of each type (see [components.md](./components.md)).
 - The TypeScript types (`CircuitJSON`, `ComponentJSON`, …) and a JSON Schema (`CIRCUIT_SCHEMA`, draft 2020-12) are exported for editors and external validators.
 
+## Exporting and sharing
+
+`export(format)` writes the circuit in one of three exchange formats, and the constructor reads any of them back:
+
+| Format      | `export` returns       | Use                                                                 |
+| ----------- | ---------------------- | ------------------------------------------------------------------- |
+| `"json"`    | a `CircuitJSON` object | the canonical document, used internally                             |
+| `"netlist"` | SPICE text             | read by humans and by other simulators                              |
+| `"base64"`  | a URL-safe token       | a single string without spaces, ready to send in a URL or a message |
+
+```ts
+const c = new ElecMap("V1 in 0 AC 1
+R1 in out 1k
+C1 out 0 100n");
+
+const token = c.export("base64");
+// "eyJ2ZXJzaW9uIjoxLCJjb21wb25lbnRzIjpbeyJpZCI6IlYxIiwidHlwZSI6InZzb3VyY2Ui…"
+token.length; // 310    characters [A-Za-z0-9_-], safe in a URL as is
+
+const copy = new ElecMap(token); // the format is detected
+copy.transferFunction({ input: "V1", output: "out" }).cutoffFrequency(); // 1591.5 Hz
+
+c.export("netlist");
+// * ElecMap circuit
+// V1 in 0 AC 1
+// R1 in out 1k
+// C1 out 0 100n
+// .end
+
+c.export("json");
+// { version: 1, components: [
+//   { id: "V1", type: "vsource", nodes: ["in", "0"], ac: { mag: 1 } }, … ], ground: "0" }
+```
+
+The format of a text input is detected: text starting with `{` is JSON, a single token without whitespace is base64, anything else is a netlist. Set it explicitly with `format`:
+
+```ts
+new ElecMap(text, { format: "netlist" }); // a netlist, even if it looks like something else
+new ElecMap(token, { format: "base64" });
+```
+
+The base64 token is the compact JSON document in UTF-8, so it carries everything the JSON does. Every conversion goes through the JSON document: reading a netlist means netlist → JSON, exporting it means JSON → base64, so each format only needs a reader and a writer.
+
 ## Validation
 
 `compile()` runs `validateCircuit()` and throws an `ElecMapError` with code `INVALID_CIRCUIT` if any error is found. Every issue is listed in `error.details.issues`, so a UI can highlight the faulty component or node. Warnings are kept in `circuit.warnings`.

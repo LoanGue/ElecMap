@@ -1,5 +1,7 @@
 import { compile } from "./core/circuit";
 import type { CircuitInput, CompileOptions, CompiledCircuit } from "./core/circuit";
+import { writeCircuit } from "./format/exchange";
+import type { CircuitFormat, FormatOutput } from "./format/exchange";
 import { ElecMapError } from "./core/errors";
 import { COMPONENT_CATALOG } from "./format/catalog";
 import type { CircuitJSON, ComponentJSON, NodeName } from "./format/types";
@@ -68,13 +70,17 @@ export class ElecMap {
   private dcCache: DcSolution | undefined;
 
   /**
-   * Builds a circuit from a SPICE netlist or a JSON document. The input is
-   * validated: an invalid circuit throws an {@link ElecMapError}.
+   * Builds a circuit from a SPICE netlist, a JSON document or a base64 token
+   * (see {@link ElecMap.export}). The format is detected, or set with
+   * `options.format`. The input is validated: an invalid circuit throws an
+   * {@link ElecMapError}.
    *
    * @example
    * ```ts
    * new ElecMap("V1 in 0 AC 1\nR1 in out 1k\nC1 out 0 100n"); // SPICE netlist
    * new ElecMap({ version: 1, components: [ ... ] }); // JSON document
+   * new ElecMap("eyJ2ZXJzaW9uIjox…"); // base64, as produced by export("base64")
+   * new ElecMap(text, { format: "netlist" }); // explicit format
    * new ElecMap(netlist, { ground: "gnd" }); // another name for the ground node
    * ```
    */
@@ -226,6 +232,24 @@ export class ElecMap {
    */
   toSpice(): string {
     return this.compiled.toSpice();
+  }
+
+  /**
+   * Exports the circuit in an exchange format: `"json"` (the canonical
+   * document, an object), `"netlist"` (SPICE text) or `"base64"` (a single
+   * URL-safe token, ready to send). Every format can be read back by the
+   * constructor.
+   *
+   * @example
+   * ```ts
+   * const token = c.export("base64"); // "eyJ2ZXJzaW9uIjox…"
+   * new ElecMap(token).voltage("out"); // same circuit
+   * c.export("netlist"); // "* ElecMap circuit
+V1 in 0 …"
+   * ```
+   */
+  export<F extends CircuitFormat>(format: F): FormatOutput[F] {
+    return writeCircuit(this.compiled.toJSON(), format);
   }
 
   /**
