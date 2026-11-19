@@ -28,9 +28,18 @@
  * `PMOS` stand for a default model (ElecMap extensions). Unsupported model
  * parameters are ignored with a warning.
  *
+ * Subcircuits: `.subckt NAME port… [PARAMS:] [K=default…]` … `.ends`, used with
+ * `Xname node… NAME [K=value…]`. They are flattened: the elements of `X1` become
+ * `X1.R1`, `X1.C2`…, its internal nodes `X1.mid`…; ports are replaced by the
+ * instance nodes and the ground stays global. Subcircuits may be nested.
+ * Parameters (`.param K=value`, subcircuit defaults and instance values) are
+ * used as `{expression}` in element lines.
+ *
  * Comments start with `*` (whole line) or `;` / `$ ` (inline). Lines starting
- * with `+` continue the previous line. `.title`, `.model`, `.end` are understood;
- * other dot-directives are ignored with a warning.
+ * with `+` continue the previous line. `.title`, `.model`, `.param`, `.subckt`,
+ * `.ends`, `.end` are understood; other dot-directives are ignored with a warning.
+ * The type of an element is the first letter of the last `.`-separated part of
+ * its name, so a flattened `X1.R1` is read back as a resistor.
  *
  * @module
  */
@@ -50,6 +59,8 @@ import type {
 } from "./types";
 import { FORMAT_VERSION } from "./types";
 import { formatSpice, parseValue } from "./units";
+import { evaluate } from "./expression";
+import { GROUND_ALIASES } from "./validate";
 
 /** Options for {@link parseSpice}. */
 export interface SpiceParseOptions {
@@ -562,6 +573,11 @@ function parseMosfet(
   return comp;
 }
 
+/** Element letter: first letter of the last `.`-separated part of the name. */
+function elementLetter(id: string): string | undefined {
+  return id.slice(id.lastIndexOf(".") + 1)[0]?.toUpperCase();
+}
+
 function parseElement(
   text: string,
   line: number,
@@ -572,7 +588,7 @@ function parseElement(
   const first = tokens.shift();
   if (first?.kind !== "word") fail("expected an element name", line);
   const id = first.value;
-  const letter = id[0]?.toUpperCase();
+  const letter = elementLetter(id);
 
   if (letter === "V" || letter === "I") {
     return parseSource(id, letter === "V" ? "vsource" : "isource", tokens, line);
@@ -657,13 +673,7 @@ function parseElement(
       return parseMosfet(id, p, params, models, line, warnings);
     case "X": {
       const model = p[p.length - 1]?.toUpperCase();
-      if (model !== "OPAMP") {
-        throw new ElecMapError(
-          "UNSUPPORTED",
-          `Line ${line}: subcircuit "${p[p.length - 1] ?? ""}" is not supported (only OPAMP)`,
-          { line },
-        );
-      }
+      if (model !== "OPAMP") fail(`${id}: unknown subcircuit "${p[p.length - 1] ?? ""}"`, line);
       if (p.length !== 4) fail(`${id}: OPAMP expects 3 nodes (in+ in- out)`, line);
       const comp: ComponentJSON = {
         id,
@@ -681,10 +691,188 @@ function parseElement(
   }
 }
 
+/** A `.subckt` definition: its ports, default parameters and body lines. */
+interface Subcircuit {
+  name: string;
+  ports: string[];
+  /** Default parameters, in order (upper-case name, expression). */
+  defaults: [string, string][];
+  body: Line[];
+  /** Line of the `.subckt` header. */
+  line: number;
+}
+
+/** Everything element lines can refer to. */
+interface Context {
+  models: Models;
+  subckts: ReadonlyMap<string, Subcircuit>;
+  globals: ReadonlyMap<string, number>;
+  isGround: (n: NodeName) => boolean;
+  warnings: string[];
+}
+
+/** Where lines are expanded: the top level, or inside a subcircuit instance. */
+interface Scope {
+  /** Prefix of element ids and internal nodes (`""`, `"X1."`, `"X1.X2."`). */
+  prefix: string;
+  /** Maps a node name of this scope to its global name. */
+  node: (n: NodeName) => NodeName;
+  params: Map<string, number>;
+  /** Subcircuits being expanded (to detect recursion). */
+  stack: string[];
+}
+
+/** Expression → value, with parse errors on `line`. */
+function evalParam(expr: string, params: ReadonlyMap<string, number>, line: number): number {
+  const bare = expr.startsWith("{") && expr.endsWith("}") ? expr.slice(1, -1) : expr;
+  return evaluate(bare, params, (m) => fail(m, line));
+}
+
+/** Replaces every `{expression}` of a line by its value. */
+function substitute(text: string, params: ReadonlyMap<string, number>, line: number): string {
+  return text.replace(/\{([^}]*)\}/g, (_, e: string) => String(evalParam(e, params, line)));
+}
+
+/** `K=v` pairs of a directive (`.param`, `.subckt` header), `PARAMS:` skipped. */
+function directiveParams(ws: string[], line: number): [string, string][] {
+  return ws
+    .filter((w) => w.toUpperCase() !== "PARAMS:")
+    .map((w) => {
+      const eq = w.indexOf("=");
+      if (eq <= 0) fail(`expected K=value, got "${w}"`, line);
+      return [w.slice(0, eq).toUpperCase(), w.slice(eq + 1)];
+    });
+}
+
+/** Renames a parsed element of a subcircuit into the global namespace. */
+function relocate(c: ComponentJSON, scope: Scope): ComponentJSON {
+  if (scope.prefix === "") return c;
+  const r = { ...c, id: scope.prefix + c.id } as ComponentJSON & Record<string, unknown>;
+  if ("nodes" in c) r.nodes = (c.nodes as NodeName[]).map(scope.node);
+  if ("control" in c) r.control = c.control.map(scope.node);
+  if ("controlSource" in c) r.controlSource = scope.prefix + c.controlSource;
+  if ("inductors" in c) r.inductors = c.inductors.map((i) => scope.prefix + i);
+  return r;
+}
+
+/** Expands the element lines of a scope into `out`. */
+function expand(lines: Line[], scope: Scope, ctx: Context, out: ComponentJSON[]): void {
+  for (const l of lines) {
+    const text = substitute(l.text, scope.params, l.line);
+    if (text.startsWith(".")) {
+      // Only local directives reach here (top-level ones are handled by parseSpice).
+      const [directive, ...rest] = text.split(" ");
+      const d = (directive as string).toLowerCase();
+      if (d === ".param") {
+        for (const [k, v] of directiveParams(rest, l.line)) {
+          scope.params.set(k, evalParam(v, scope.params, l.line));
+        }
+      } else if (d !== ".model") {
+        ctx.warnings.push(`Line ${l.line}: directive ${directive} ignored`);
+      }
+      continue;
+    }
+    const id = text.split(" ")[0] as string;
+    if (elementLetter(id) === "X") {
+      const ws = words(tokenize(text, l.line), l.line).slice(1);
+      const { positional, params } = splitParams(ws.filter((w) => w.toUpperCase() !== "PARAMS:"));
+      const def = ctx.subckts.get((positional[positional.length - 1] ?? "").toUpperCase());
+      if (def) {
+        instantiate(id, def, positional.slice(0, -1), params, l.line, scope, ctx, out);
+        continue;
+      }
+    }
+    out.push(relocate(parseElement(text, l.line, ctx.models, ctx.warnings), scope));
+  }
+}
+
+/** Expands one `X` instance of a subcircuit. */
+function instantiate(
+  id: string,
+  def: Subcircuit,
+  nodes: string[],
+  overrides: ReadonlyMap<string, string>,
+  line: number,
+  scope: Scope,
+  ctx: Context,
+  out: ComponentJSON[],
+): void {
+  const key = def.name.toUpperCase();
+  if (nodes.length !== def.ports.length) {
+    fail(
+      `${id}: subcircuit ${def.name} has ${def.ports.length} ports (${def.ports.join(" ")}), got ${nodes.length} nodes`,
+      line,
+    );
+  }
+  if (scope.stack.includes(key)) {
+    fail(`${id}: recursive subcircuit ${[...scope.stack, key].join(" → ")}`, line);
+  }
+  // Instance values are evaluated in the caller's scope, defaults in the subcircuit's.
+  const values = new Map<string, number>();
+  for (const [k, v] of overrides) {
+    if (!def.defaults.some(([d]) => d === k)) {
+      fail(`${id}: subcircuit ${def.name} has no parameter ${k}`, line);
+    }
+    values.set(k, evalParam(v, scope.params, line));
+  }
+  const params = new Map(ctx.globals);
+  for (const [k, v] of def.defaults) params.set(k, values.get(k) ?? evalParam(v, params, line));
+
+  const actual = nodes.map(scope.node);
+  const ports = new Map(def.ports.map((p, i) => [p, actual[i] as NodeName]));
+  const prefix = scope.prefix + id + ".";
+  const node = (n: NodeName): NodeName => ports.get(n) ?? (ctx.isGround(n) ? n : prefix + n);
+  expand(def.body, { prefix, node, params, stack: [...scope.stack, key] }, ctx, out);
+}
+
+/** Separates `.subckt` … `.ends` blocks from the top-level lines. */
+function splitSubcircuits(lines: Line[]): { top: Line[]; subckts: Map<string, Subcircuit> } {
+  const top: Line[] = [];
+  const subckts = new Map<string, Subcircuit>();
+  let current: Subcircuit | undefined;
+  for (const l of lines) {
+    const d = (l.text.split(" ")[0] as string).toLowerCase();
+    if (d === ".end" && !current) {
+      top.push(l);
+      break;
+    }
+    if (d === ".subckt") {
+      if (current) {
+        throw new ElecMapError(
+          "UNSUPPORTED",
+          `Line ${l.line}: .subckt inside .subckt ${current.name} is not supported (define it at top level)`,
+          { line: l.line },
+        );
+      }
+      const ws = l.text.split(" ").slice(1);
+      const name = ws.shift();
+      if (name === undefined) fail(".subckt without a name", l.line);
+      const firstParam = ws.findIndex((w) => w.includes("=") || w.toUpperCase() === "PARAMS:");
+      const ports = firstParam === -1 ? ws : ws.slice(0, firstParam);
+      const defaults = firstParam === -1 ? [] : directiveParams(ws.slice(firstParam), l.line);
+      if (subckts.has(name.toUpperCase())) fail(`duplicate subcircuit "${name}"`, l.line);
+      if (new Set(ports).size !== ports.length) fail(`${name}: duplicate port`, l.line);
+      current = { name, ports, defaults, body: [], line: l.line };
+      subckts.set(name.toUpperCase(), current);
+      continue;
+    }
+    if (d === ".ends") {
+      if (!current) fail(".ends without .subckt", l.line);
+      current = undefined;
+      continue;
+    }
+    (current ? current.body : top).push(l);
+  }
+  if (current) fail(`.subckt ${current.name} is missing its .ends`, current.line);
+  return { top, subckts };
+}
+
 /** True if the line parses as a valid element (used to detect a SPICE title line). */
-function looksLikeElement({ text, line }: Line, models: Models): boolean {
+function looksLikeElement(l: Line, ctx: Context): boolean {
+  if (l.text.startsWith(".")) return false;
   try {
-    parseElement(text, line, models);
+    const scope: Scope = { prefix: "", node: (n) => n, params: new Map(ctx.globals), stack: [] };
+    expand([l], scope, { ...ctx, warnings: [] }, []);
     return true;
   } catch {
     return false;
@@ -693,53 +881,77 @@ function looksLikeElement({ text, line }: Line, models: Models): boolean {
 
 /**
  * Parses a SPICE netlist into the canonical {@link CircuitJSON} format.
+ * Subcircuits are flattened (see the module documentation).
  *
  * @throws {@link ElecMapError} `PARSE_ERROR` (with `details.line`) or `UNSUPPORTED`
  */
 export function parseSpice(source: string, options: SpiceParseOptions = {}): SpiceParseResult {
-  const lines = logicalLines(source);
+  const all = logicalLines(source);
+  // Expressions may contain spaces: "{2 * R}" → "{2*R}".
+  for (const l of all) l.text = l.text.replace(/\{[^}]*\}/g, (m) => m.replace(/\s+/g, ""));
   const warnings: string[] = [];
   const circuit: CircuitJSON = { version: FORMAT_VERSION, components: [] };
   if (options.ground !== undefined) circuit.ground = options.ground;
 
   const titleMode = options.titleLine ?? "auto";
-  const firstLine = lines[0];
+  let title: Line | undefined;
+  if (titleMode === true && all.length > 0) title = all.shift();
+  const { top, subckts } = splitSubcircuits(all);
 
-  // Model cards first: elements may use a model defined further down.
+  // Model cards and global parameters first: elements may use them further down.
   const models = new Map<string, ModelCard>();
-  for (const l of lines) {
-    if (l === firstLine && titleMode === true) continue;
-    if (/^\.end\b/i.test(l.text)) break;
+  const globals = new Map<string, number>();
+  const scan = [...top, ...[...subckts.values()].flatMap((s) => s.body)];
+  for (const l of scan) {
     if (!/^\.model\b/i.test(l.text)) continue;
     const card = parseModel(l.text, l.line, warnings);
     const key = card.name.toUpperCase();
     if (models.has(key)) fail(`duplicate model "${card.name}"`, l.line);
     models.set(key, card);
   }
-
-  if (firstLine && !firstLine.text.startsWith(".")) {
-    if (titleMode === true || (titleMode === "auto" && !looksLikeElement(firstLine, models))) {
-      circuit.title = firstLine.text;
-      lines.shift();
+  for (const l of top) {
+    if (/^\.end\b/i.test(l.text)) break;
+    if (!/^\.param\b/i.test(l.text)) continue;
+    for (const [k, v] of directiveParams(l.text.split(" ").slice(1), l.line)) {
+      globals.set(k, evalParam(v, globals, l.line));
     }
   }
 
-  for (const { text, line } of lines) {
-    if (text.startsWith(".")) {
-      const [directive, ...rest] = text.split(" ");
-      const d = (directive as string).toLowerCase();
-      if (d === ".end") break;
-      if (d === ".title") circuit.title = rest.join(" ");
-      else if (d === ".model") continue;
-      else if (d === ".subckt") {
-        throw new ElecMapError("UNSUPPORTED", `Line ${line}: .subckt is not supported yet`, {
-          line,
-        });
-      } else warnings.push(`Line ${line}: directive ${directive} ignored`);
+  const ground = options.ground ?? "0";
+  const ctx: Context = {
+    models,
+    subckts,
+    globals,
+    isGround: (n) => n === ground || GROUND_ALIASES.includes(n),
+    warnings,
+  };
+  const first = top[0];
+  if (
+    titleMode === "auto" &&
+    first &&
+    !first.text.startsWith(".") &&
+    !looksLikeElement(first, ctx)
+  ) {
+    title = top.shift();
+  }
+  if (title) circuit.title = title.text;
+
+  const elements: Line[] = [];
+  for (const l of top) {
+    if (!l.text.startsWith(".")) {
+      elements.push(l);
       continue;
     }
-    circuit.components.push(parseElement(text, line, models, warnings));
+    const [directive, ...rest] = l.text.split(" ");
+    const d = (directive as string).toLowerCase();
+    if (d === ".end") break;
+    if (d === ".title") circuit.title = rest.join(" ");
+    else if (d !== ".model" && d !== ".param") {
+      warnings.push(`Line ${l.line}: directive ${directive} ignored`);
+    }
   }
+  const scope: Scope = { prefix: "", node: (n) => n, params: new Map(globals), stack: [] };
+  expand(elements, scope, ctx, circuit.components);
   return { circuit, warnings };
 }
 

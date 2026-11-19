@@ -218,7 +218,7 @@ Supported components: R, C, L, coupled inductors (K), independent V/I sources, t
 ## Limitations
 
 - Non-linear components: diodes, BJTs (Ebers-Moll with Early effect) and level-1 MOSFETs; their capacitances are constant. Switches have a fixed state.
-- `.model` supports `D`, `NPN`, `PNP`, `NMOS`, `PMOS` (level 1); no `.subckt` / `.include` yet: netlists must be flat.
+- `.model` supports `D`, `NPN`, `PNP`, `NMOS`, `PMOS` (level 1); `.subckt` blocks are flattened when read (the JSON and netlist exports are flat); no `.include`.
 - Literal transfer functions are linear-only: a circuit with a diode gives its numeric, linearised transfer function only.
 - Literal transfer functions remove common monomial factors only; a pole/zero cancellation that holds for every component value may leave the expression one order higher than the numeric one. They are limited to about 30 unknowns (use `symbols` to keep only some components literal).
 - Dense linear algebra: comfortable up to a few hundred nodes.
@@ -237,7 +237,7 @@ Supported components: R, C, L, coupled inductors (K), independent V/I sources, t
 10. ✅ Symbolic transfer functions
 11. ✅ Documentation, examples, packaging checks
 12. First npm release (v0.1.0)
-13. Non-linear components: 🚧 diodes and Newton-Raphson ✅, BJT and MOSFET ✅; `.subckt`, sensitivities
+13. Non-linear components: 🚧 diodes and Newton-Raphson ✅, BJT and MOSFET ✅, `.subckt` and `.param` ✅; sensitivities
 
 ## Development
 
