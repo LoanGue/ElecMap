@@ -25,6 +25,12 @@ export interface SvgOptions {
   scale?: number;
   /** Paint a background rectangle (default false: transparent). */
   background?: boolean;
+  /**
+   * Ground drawing (used by `ElecMap.toSVG`): `"auto"` (default), `"rail"`
+   * (common line at the bottom that closes the circuit) or `"symbols"` (one
+   * ground symbol per grounded pin). See `LayoutOptions.ground`.
+   */
+  ground?: "symbols" | "rail" | "auto";
   /** Accessible title (`<title>`). */
   title?: string;
 }
@@ -286,6 +292,7 @@ export function renderSvg(layout: SchematicLayout, options: SvgOptions = {}): st
   // Node names.
   if (nodeLabels) {
     for (const net of layout.nets) {
+      if (net.ground) continue;
       if (nodeLabels === "named" && /^\d+$/.test(net.node)) continue;
       const hl = highlight.has(net.node) ? " hl" : "";
       out.push(

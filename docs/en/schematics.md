@@ -52,6 +52,35 @@ filter.toSVG({ highlight: ["C1", "out"], nodeLabels: true });
 <figcaption>C1 and the <code>out</code> node in the accent colour; every node named</figcaption>
 </figure>
 
+## Close the circuit, or not
+
+By default the grounds are joined by a rail along the bottom, which closes the circuit like in a textbook: the current loop is visible at a glance. When a ground cannot reach that rail by a straight drop (an op-amp input buried in the circuit, a bridge…), each grounded pin gets its own ground symbol instead, which keeps big circuits readable. Force either drawing with `ground`:
+
+```ts
+const ladder = new ElecMap(`
+V1 in 0 AC 1
+R1 in a 1k
+C1 a 0 100n
+R2 a out 1k
+C2 out 0 100n
+`);
+
+ladder.toSVG(); // ground: "auto": the rail here
+ladder.toSVG({ ground: "symbols" }); // one ground symbol per grounded pin
+ladder.toSVG({ ground: "rail" }); // always the rail, routed around obstacles if needed
+```
+
+<figure class="em-figure">
+{@include ./figures/ground-rail.svg}
+<figcaption><code>ground: "rail"</code> (what <code>"auto"</code> picks here)</figcaption>
+</figure>
+<figure class="em-figure">
+{@include ./figures/ground-symbols.svg}
+<figcaption><code>ground: "symbols"</code></figcaption>
+</figure>
+
+The rail is the ground node's wire: it carries `data-node="0"` like any other node.
+
 ## All the options
 
 ```ts
@@ -61,6 +90,7 @@ circuit.toSVG({
   showIds: true, // "R1", "C2"…
   nodeLabels: "named", // true: all nodes, false: none, "named": hides numeric SPICE nodes
   highlight: ["R1", "out"], // component ids and/or node names
+  ground: "auto", // "rail" (closed circuit), "symbols", or "auto": the rail when it stays clean
   theme: "auto", // "light", "dark", "auto" (follows the system) or "none"
   scale: 20, // pixels per grid unit
   background: false, // fill the background
@@ -111,6 +141,7 @@ const layout = amp.layout();
 layout.components; // [{ id, type, x, y, orientation, pins: [{ node, x, y }] }, …]
 layout.nets; // wires: segments and junction dots per node
 layout.grounds; // ground symbols
+amp.layout({ ground: "symbols" }); // same options as toSVG for the ground
 layout.bounds; // size of the drawing, in grid units
 ```
 
