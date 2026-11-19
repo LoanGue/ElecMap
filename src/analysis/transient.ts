@@ -79,11 +79,13 @@ export class TransientResult {
 
   /** Instantaneous power absorbed by a component at every time point (W). */
   power(id: string): number[] {
-    const c = this.system.circuit.component(id);
-    if (c.type === "coupling") return this.time.map(() => 0);
-    const v = c.type === "opamp" ? this.voltage(c.nodes[2]) : this.voltage(c.nodes[0], c.nodes[1]);
-    const i = this.current(id);
-    return v.map((vk, k) => vk * (i[k] as number));
+    const out = this.time.map(() => 0);
+    for (const t of this.system.powerTerms(id)) {
+      const v = this.evaluate(t.v);
+      const i = this.evaluate(t.i);
+      v.forEach((vk, k) => (out[k] = (out[k] as number) + vk * (i[k] as number)));
+    }
+    return out;
   }
 }
 

@@ -10,4 +10,5 @@ export type {
   LoadContext,
   SourceIncidence,
   StampContext,
+  Terminal,
 } from "./models";

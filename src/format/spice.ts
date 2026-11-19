@@ -18,10 +18,14 @@
  * | `Xname in+ in- out OPAMP [GAIN=a] [GBW=f]` | op-amp (ElecMap extension) |
  * | `Sname n1 n2 ON\|OFF [RON=r] [ROFF=r]` | fixed switch (ElecMap extension) |
  * | `Dname anode cathode [model] [area] [IS=… N=… RS=… BV=…]` | diode / zener |
+ * | `Qname c b e [substrate] model [area]` | bipolar transistor (`NPN` / `PNP` cards) |
+ * | `Mname d g s [b] model [W=…] [L=…]` | MOSFET level 1 (`NMOS` / `PMOS` cards) |
  *
- * Device parameters come from `.model name D(IS=… N=… RS=… BV=… IBV=… NBV=… CJO=…)`
- * cards (anywhere in the netlist, names case-insensitive); parameters written on
- * the element line override them (ElecMap extension). Unsupported model
+ * Device parameters come from `.model` cards (anywhere in the netlist, names
+ * case-insensitive): `D(IS N RS BV IBV NBV CJO)`, `NPN`/`PNP(IS BF BR NF NR VAF VAR
+ * CJE CJC)`, `NMOS`/`PMOS(VTO KP LAMBDA GAMMA PHI CGSO CGDO)`. Parameters written
+ * on the element line override them, and the bare names `NPN`, `PNP`, `NMOS`,
+ * `PMOS` stand for a default model (ElecMap extensions). Unsupported model
  * parameters are ignored with a warning.
  *
  * Comments start with `*` (whole line) or `;` / `$ ` (inline). Lines starting
@@ -36,8 +40,10 @@ import type {
   AcSpec,
   CircuitJSON,
   ComponentJSON,
+  BjtJSON,
   CurrentSourceJSON,
   DiodeJSON,
+  MosfetJSON,
   NodeName,
   VoltageSourceJSON,
   Waveform,
@@ -272,21 +278,67 @@ interface ModelCard {
 
 type Models = ReadonlyMap<string, ModelCard>;
 
-/** Diode fields and their SPICE parameter names. */
-const DIODE_PARAMS = [
-  ["is", "IS"],
-  ["n", "N"],
-  ["rs", "RS"],
-  ["bv", "BV"],
-  ["ibv", "IBV"],
-  ["nbv", "NBV"],
-  ["cjo", "CJO"],
-] as const;
+/** Device families that take their parameters from a `.model` card. */
+type Family = "diode" | "bjt" | "mosfet";
 
-type DiodeField = (typeof DIODE_PARAMS)[number][0];
-type DiodeCard = Partial<Record<DiodeField, number>>;
+/** Numeric fields of each family and their SPICE parameter names. */
+const FAMILY_PARAMS: Record<Family, readonly (readonly [string, string])[]> = {
+  diode: [
+    ["is", "IS"],
+    ["n", "N"],
+    ["rs", "RS"],
+    ["bv", "BV"],
+    ["ibv", "IBV"],
+    ["nbv", "NBV"],
+    ["cjo", "CJO"],
+  ],
+  bjt: [
+    ["is", "IS"],
+    ["bf", "BF"],
+    ["br", "BR"],
+    ["nf", "NF"],
+    ["nr", "NR"],
+    ["vaf", "VAF"],
+    ["var", "VAR"],
+    ["cje", "CJE"],
+    ["cjc", "CJC"],
+  ],
+  mosfet: [
+    ["vto", "VTO"],
+    ["kp", "KP"],
+    ["lambda", "LAMBDA"],
+    ["gamma", "GAMMA"],
+    ["phi", "PHI"],
+    ["cgso", "CGSO"],
+    ["cgdo", "CGDO"],
+  ],
+};
 
-const MODEL_ALIASES: Record<string, string> = { CJ0: "CJO" };
+/** `.model` types and the family they describe. */
+const MODEL_TYPES: Record<string, Family> = {
+  D: "diode",
+  NPN: "bjt",
+  PNP: "bjt",
+  NMOS: "mosfet",
+  PMOS: "mosfet",
+};
+
+const FAMILY_NAMES: Record<Family, string> = {
+  diode: "diode",
+  bjt: "bipolar transistor",
+  mosfet: "MOSFET",
+};
+
+const MODEL_ALIASES: Record<string, string> = { CJ0: "CJO", VA: "VAF", VB: "VAR", VT0: "VTO" };
+
+/**
+ * A `.model` card as written by {@link toSpice}: its SPICE type (`D`, `NPN`,
+ * `PNP`, `NMOS`, `PMOS`) and the device fields it sets (by field name).
+ */
+export interface DeviceCard {
+  type: string;
+  values: Partial<Record<string, number>>;
+}
 
 function parseModel(text: string, line: number, warnings: string[]): ModelCard {
   const tokens = tokenize(text, line).slice(1);
@@ -307,21 +359,90 @@ function parseModel(text: string, line: number, warnings: string[]): ModelCard {
   const { positional, params } = splitParams(raw);
   if (positional.length > 0)
     fail(`.model ${name.value}: unexpected "${positional[0] as string}"`, line);
-  if (type !== "D") {
+  const family = MODEL_TYPES[type];
+  if (!family) {
     throw new ElecMapError(
       "UNSUPPORTED",
-      `Line ${line}: .model type "${type}" is not supported (only D)`,
+      `Line ${line}: .model type "${type}" is not supported (only ${Object.keys(MODEL_TYPES).join(", ")})`,
       { line },
     );
   }
-  const known = new Set<string>(DIODE_PARAMS.map(([, k]) => k));
+  const known = new Set<string>(FAMILY_PARAMS[family].map(([, k]) => k));
   const out = new Map<string, string>();
   for (const [k, v] of params) {
     const key = MODEL_ALIASES[k] ?? k;
-    if (known.has(key)) out.set(key, v);
+    if (family === "mosfet" && key === "LEVEL") {
+      if (num(v, `${name.value} LEVEL`, line) !== 1) {
+        throw new ElecMapError(
+          "UNSUPPORTED",
+          `Line ${line}: model ${name.value}: only MOSFET LEVEL=1 is supported`,
+          { line },
+        );
+      }
+    } else if (known.has(key)) out.set(key, v);
     else warnings.push(`Line ${line}: model ${name.value}: parameter ${k} ignored`);
   }
   return { name: name.value, type, params: out, line };
+}
+
+/** Copies the parameters of a model card into a device. */
+function applyCard(comp: object, family: Family, card: ModelCard): void {
+  const target = comp as Record<string, unknown>;
+  for (const [field, key] of FAMILY_PARAMS[family]) {
+    const v = card.params.get(key);
+    if (v !== undefined) target[field] = num(v, `${card.name} ${key}`, card.line);
+  }
+}
+
+/**
+ * Applies the `KEY=value` parameters of an element line: `extra` fields
+ * (instance parameters), then model parameters overriding the card.
+ */
+function applyLineParams(
+  comp: object,
+  family: Family,
+  params: Map<string, string>,
+  id: string,
+  line: number,
+  extra: Record<string, string> = {},
+  ignored: readonly string[] = [],
+  warnings: string[] = [],
+): void {
+  const target = comp as Record<string, unknown>;
+  const fields = new Map<string, string>(FAMILY_PARAMS[family].map(([field, key]) => [key, field]));
+  for (const [k, v] of params) {
+    const field = extra[k] ?? fields.get(MODEL_ALIASES[k] ?? k);
+    if (field) target[field] = num(v, `${id} ${k}`, line);
+    else if (ignored.includes(k)) warnings.push(`Line ${line}: ${id}: parameter ${k} ignored`);
+    else fail(`${id}: unknown ${FAMILY_NAMES[family]} parameter "${k}"`, line);
+  }
+}
+
+/**
+ * Looks up the model of a device: a `.model` card of the right family, or one
+ * of the bare `keywords` (default parameters). Returns the card and the type.
+ */
+function resolveModel(
+  id: string,
+  name: string,
+  family: Family,
+  keywords: readonly string[],
+  models: Models,
+  line: number,
+): { card: ModelCard | undefined; type: string } {
+  const card = models.get(name.toUpperCase());
+  if (card) {
+    if (MODEL_TYPES[card.type] !== family) {
+      fail(
+        `${id}: model "${card.name}" is a ${card.type} model, not a ${FAMILY_NAMES[family]}`,
+        line,
+      );
+    }
+    return { card, type: card.type };
+  }
+  const type = name.toUpperCase();
+  if (!keywords.includes(type)) fail(`${id}: unknown model "${name}"`, line);
+  return { card: undefined, type };
 }
 
 function parseDiode(
@@ -335,23 +456,16 @@ function parseDiode(
   const comp: DiodeJSON = { id, type: "diode", nodes: [p[0] as string, p[1] as string] };
   let rest = p.slice(2);
   if (rest[0] !== undefined && parseValue(rest[0]) === undefined) {
-    const card = models.get(rest[0].toUpperCase());
-    if (!card) fail(`${id}: unknown model "${rest[0]}"`, line);
-    comp.model = card.name;
-    for (const [field, key] of DIODE_PARAMS) {
-      const v = card.params.get(key);
-      if (v !== undefined) comp[field] = num(v, `${card.name} ${key}`, card.line);
+    const { card } = resolveModel(id, rest[0], "diode", [], models, line);
+    if (card) {
+      comp.model = card.name;
+      applyCard(comp, "diode", card);
     }
     rest = rest.slice(1);
   }
   if (rest.length > 1) fail(`${id}: unexpected "${rest[1] as string}"`, line);
   const area = rest[0] === undefined ? 1 : num(rest[0], `${id} area`, line);
-  const fields = new Map<string, DiodeField>(DIODE_PARAMS.map(([field, key]) => [key, field]));
-  for (const [k, v] of params) {
-    const field = fields.get(MODEL_ALIASES[k] ?? k);
-    if (!field) fail(`${id}: unknown diode parameter "${k}"`, line);
-    comp[field] = num(v, `${id} ${k}`, line);
-  }
+  applyLineParams(comp, "diode", params, id, line);
   if (area !== 1) {
     if (!(area > 0)) fail(`${id}: area must be > 0`, line);
     comp.is = (comp.is ?? 1e-14) * area;
@@ -362,7 +476,98 @@ function parseDiode(
   return comp;
 }
 
-function parseElement(text: string, line: number, models: Models = new Map()): ComponentJSON {
+const BJT_KEYWORDS = ["NPN", "PNP"] as const;
+const MOSFET_KEYWORDS = ["NMOS", "PMOS"] as const;
+
+function parseBjt(
+  id: string,
+  p: string[],
+  params: Map<string, string>,
+  models: Models,
+  line: number,
+  warnings: string[],
+): BjtJSON {
+  if (p.length < 4) fail(`${id}: expected collector, base, emitter [substrate] model [area]`, line);
+  const isModel = (w: string | undefined) =>
+    w !== undefined &&
+    (models.has(w.toUpperCase()) || (BJT_KEYWORDS as readonly string[]).includes(w.toUpperCase()));
+  let at = 3;
+  if (!isModel(p[3]) && isModel(p[4])) {
+    at = 4;
+    warnings.push(`Line ${line}: ${id}: substrate node "${p[3] as string}" ignored`);
+  }
+  const { card, type } = resolveModel(id, p[at] as string, "bjt", BJT_KEYWORDS, models, line);
+  const comp: BjtJSON = {
+    id,
+    type: "bjt",
+    nodes: [p[0] as string, p[1] as string, p[2] as string],
+    polarity: type === "PNP" ? "pnp" : "npn",
+  };
+  if (card) {
+    comp.model = card.name;
+    applyCard(comp, "bjt", card);
+  }
+  const rest = p.slice(at + 1);
+  if (rest.length > 1) fail(`${id}: unexpected "${rest[1] as string}"`, line);
+  const area = rest[0] === undefined ? 1 : num(rest[0], `${id} area`, line);
+  applyLineParams(comp, "bjt", params, id, line);
+  if (area !== 1) {
+    if (!(area > 0)) fail(`${id}: area must be > 0`, line);
+    comp.is = (comp.is ?? 1e-16) * area;
+    if (comp.cje !== undefined) comp.cje *= area;
+    if (comp.cjc !== undefined) comp.cjc *= area;
+  }
+  return comp;
+}
+
+function parseMosfet(
+  id: string,
+  p: string[],
+  params: Map<string, string>,
+  models: Models,
+  line: number,
+  warnings: string[],
+): MosfetJSON {
+  if (p.length < 4) fail(`${id}: expected drain, gate, source [bulk] model`, line);
+  const isModel = (w: string | undefined) =>
+    w !== undefined &&
+    (models.has(w.toUpperCase()) ||
+      (MOSFET_KEYWORDS as readonly string[]).includes(w.toUpperCase()));
+  // Without a bulk node (ElecMap extension), the bulk is tied to the source.
+  const at = isModel(p[4]) || !isModel(p[3]) ? 4 : 3;
+  if (p[at] === undefined) fail(`${id}: unknown model "${p[3] as string}"`, line);
+  const { card, type } = resolveModel(id, p[at] as string, "mosfet", MOSFET_KEYWORDS, models, line);
+  const [d, g, src] = [p[0] as string, p[1] as string, p[2] as string];
+  const comp: MosfetJSON = {
+    id,
+    type: "mosfet",
+    nodes: [d, g, src, at === 4 ? (p[3] as string) : src],
+    polarity: type === "PMOS" ? "pmos" : "nmos",
+  };
+  if (card) {
+    comp.model = card.name;
+    applyCard(comp, "mosfet", card);
+  }
+  if (p.length > at + 1) fail(`${id}: unexpected "${p[at + 1] as string}"`, line);
+  applyLineParams(
+    comp,
+    "mosfet",
+    params,
+    id,
+    line,
+    { W: "w", L: "l" },
+    ["AD", "AS", "PD", "PS", "NRD", "NRS"],
+    warnings,
+  );
+  return comp;
+}
+
+function parseElement(
+  text: string,
+  line: number,
+  models: Models = new Map(),
+  warnings: string[] = [],
+): ComponentJSON {
   const tokens = tokenize(text, line);
   const first = tokens.shift();
   if (first?.kind !== "word") fail("expected an element name", line);
@@ -446,6 +651,10 @@ function parseElement(text: string, line: number, models: Models = new Map()): C
     }
     case "D":
       return parseDiode(id, p, params, models, line);
+    case "Q":
+      return parseBjt(id, p, params, models, line, warnings);
+    case "M":
+      return parseMosfet(id, p, params, models, line, warnings);
     case "X": {
       const model = p[p.length - 1]?.toUpperCase();
       if (model !== "OPAMP") {
@@ -529,7 +738,7 @@ export function parseSpice(source: string, options: SpiceParseOptions = {}): Spi
       } else warnings.push(`Line ${line}: directive ${directive} ignored`);
       continue;
     }
-    circuit.components.push(parseElement(text, line, models));
+    circuit.components.push(parseElement(text, line, models, warnings));
   }
   return { circuit, warnings };
 }
@@ -574,23 +783,42 @@ function sourceToSpice(c: Extract<ComponentJSON, { type: "vsource" | "isource" }
   return parts.join(" ");
 }
 
-/** `KEY=value` list of the diode fields of `c` that differ from `card`. */
-function diodeParamsText(c: DiodeJSON, card: DiodeCard = {}): string[] {
-  return DIODE_PARAMS.filter(([field]) => c[field] !== undefined && c[field] !== card[field]).map(
-    ([field, key]) => `${key}=${formatSpice(c[field] as number)}`,
-  );
+type Device = DiodeJSON | BjtJSON | MosfetJSON;
+
+/** `.model` type of a device. */
+function modelType(c: Device): string {
+  return c.type === "diode" ? "D" : c.polarity.toUpperCase();
 }
 
-/** Model cards of the diodes, by model name (parameters of the first diode using it). */
-function diodeCards(circuit: CircuitJSON): Map<string, DiodeCard> {
-  const cards = new Map<string, DiodeCard>();
+/** `KEY=value` list of the model fields of `c` that differ from `card`. */
+function paramsText(c: Device, card: DeviceCard["values"] = {}): string[] {
+  const values = c as unknown as Record<string, number | undefined>;
+  return FAMILY_PARAMS[c.type]
+    .filter(([field]) => values[field] !== undefined && values[field] !== card[field])
+    .map(([field, key]) => `${key}=${formatSpice(values[field] as number)}`);
+}
+
+/** Model cards of the devices, by model name (parameters of the first device using it). */
+function deviceCards(circuit: CircuitJSON): Map<string, DeviceCard> {
+  const cards = new Map<string, DeviceCard>();
   for (const c of circuit.components) {
-    if (c.type !== "diode" || c.model === undefined || cards.has(c.model)) continue;
-    const card: DiodeCard = {};
-    for (const [field] of DIODE_PARAMS) if (c[field] !== undefined) card[field] = c[field];
+    if (c.type !== "diode" && c.type !== "bjt" && c.type !== "mosfet") continue;
+    if (c.model === undefined || cards.has(c.model)) continue;
+    const values = c as unknown as Record<string, number | undefined>;
+    const card: DeviceCard = { type: modelType(c), values: {} };
+    for (const [field] of FAMILY_PARAMS[c.type])
+      if (values[field] !== undefined) card.values[field] = values[field];
     cards.set(c.model, card);
   }
   return cards;
+}
+
+/** Model reference and parameters of a device line. */
+function deviceText(c: Device, cards: ReadonlyMap<string, DeviceCard>): string[] {
+  const card = c.model === undefined ? undefined : cards.get(c.model);
+  const usable = card && card.type === modelType(c) ? card : undefined;
+  const name = usable ? [c.model as string] : c.type === "diode" ? [] : [modelType(c)];
+  return [...name, ...paramsText(c, usable?.values)];
 }
 
 /**
@@ -600,7 +828,7 @@ function diodeCards(circuit: CircuitJSON): Map<string, DiodeCard> {
  */
 export function componentToSpice(
   c: ComponentJSON,
-  cards: ReadonlyMap<string, DiodeCard> = new Map(),
+  cards: ReadonlyMap<string, DeviceCard> = new Map(),
 ): string {
   switch (c.type) {
     case "resistor":
@@ -635,13 +863,18 @@ export function componentToSpice(
         ...(c.ron === undefined ? [] : [`RON=${formatSpice(c.ron)}`]),
         ...(c.roff === undefined ? [] : [`ROFF=${formatSpice(c.roff)}`]),
       ].join(" ");
-    case "diode": {
-      const card = c.model === undefined ? undefined : cards.get(c.model);
+    case "diode":
+    case "bjt":
+      return [c.id, ...c.nodes, ...deviceText(c, cards)].join(" ");
+    case "mosfet": {
+      const [model, ...rest] = deviceText(c, cards);
       return [
         c.id,
         ...c.nodes,
-        ...(card ? [c.model as string] : []),
-        ...diodeParamsText(c, card),
+        model as string,
+        ...(c.w === undefined ? [] : [`W=${formatSpice(c.w)}`]),
+        ...(c.l === undefined ? [] : [`L=${formatSpice(c.l)}`]),
+        ...rest,
       ].join(" ");
     }
   }
@@ -650,13 +883,14 @@ export function componentToSpice(
 /** Serialises a circuit as a SPICE netlist (`.title` first, `.end` last). */
 export function toSpice(circuit: CircuitJSON): string {
   const lines = [circuit.title === undefined ? "* ElecMap circuit" : `.title ${circuit.title}`];
-  const cards = diodeCards(circuit);
+  const cards = deviceCards(circuit);
   for (const c of circuit.components) lines.push(componentToSpice(c, cards));
   for (const [name, card] of cards) {
-    const list = DIODE_PARAMS.filter(([f]) => card[f] !== undefined).map(
-      ([f, key]) => `${key}=${formatSpice(card[f] as number)}`,
-    );
-    lines.push(`.model ${name} D${list.length ? `(${list.join(" ")})` : ""}`);
+    const family = MODEL_TYPES[card.type] as Family;
+    const list = FAMILY_PARAMS[family]
+      .filter(([f]) => card.values[f] !== undefined)
+      .map(([f, key]) => `${key}=${formatSpice(card.values[f] as number)}`);
+    lines.push(`.model ${name} ${card.type}${list.length ? `(${list.join(" ")})` : ""}`);
   }
   lines.push(".end");
   return lines.join("\n") + "\n";

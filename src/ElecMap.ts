@@ -662,6 +662,10 @@ function defaultField(c: ComponentJSON): string {
       return "ron";
     case "diode":
       return "is";
+    case "bjt":
+      return "bf";
+    case "mosfet":
+      return "w";
     default:
       return "gain";
   }

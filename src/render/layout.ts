@@ -27,7 +27,8 @@ export interface PlacedComponent {
   orientation: Orientation;
   /**
    * Pins: `[nodes[0], nodes[1]]` for two-terminal components,
-   * `[in+, in−, out]` for op-amps.
+   * `[in+, in−, out]` for op-amps, `[c, b, e]` for bipolar transistors and
+   * `[d, g, s]` (plus the bulk when it is not tied to the source) for MOSFETs.
    */
   pins: PlacedPin[];
   /** Label lines (id, value). */
@@ -136,7 +137,71 @@ export function valueText(c: ComponentJSON): string {
       return `k = ${c.k}`;
     case "diode":
       return c.model ?? (c.bv === undefined ? "" : `BV ${formatSI(c.bv, "V")}`);
+    case "bjt":
+    case "mosfet":
+      return c.model ?? c.polarity.toUpperCase();
   }
+}
+
+/** Transistor, either kind. */
+type Transistor = ComponentJSON & { type: "bjt" | "mosfet" };
+
+/** Node drawn at the top of a transistor: collector / drain, emitter / source for P types. */
+function transistorEnds(c: Transistor): { top: NodeName; bottom: NodeName } {
+  const p = c.polarity === "pnp" || c.polarity === "pmos";
+  return p ? { top: c.nodes[2], bottom: c.nodes[0] } : { top: c.nodes[0], bottom: c.nodes[2] };
+}
+
+/** True when a MOSFET has a bulk pin of its own (bulk not tied to the source). */
+export function hasBulkPin(c: ComponentJSON): boolean {
+  return c.type === "mosfet" && c.nodes[3] !== c.nodes[2];
+}
+
+/**
+ * Transistor with its top pin at `(x, y)`: body below it, base / gate pin on the
+ * left at mid-height, bottom pin 6 cells down, bulk pin (if any) on the right.
+ */
+function transistor(
+  c: Transistor,
+  x: number,
+  y: number,
+  isGround: (n: NodeName) => boolean,
+  showValue: boolean,
+): Candidate {
+  const topFirst = c.polarity === "npn" || c.polarity === "nmos";
+  const pin = (node: NodeName, px: number, py: number): PlacedPin => ({
+    node,
+    x: px,
+    y: py,
+    ground: isGround(node),
+  });
+  const first = pin(c.nodes[0], x, topFirst ? y : y + 6);
+  const third = pin(c.nodes[2], x, topFirst ? y + 6 : y);
+  const pins = [first, pin(c.nodes[1], x - 3, y + 3), third];
+  const bulk = hasBulkPin(c);
+  if (bulk) pins.push(pin(c.nodes[3] as NodeName, x + 2, y + 3));
+  const value = showValue ? valueText(c) : "";
+  const lx = x + (bulk ? 2.8 : c.type === "bjt" ? 1.9 : 1.4);
+  const w = Math.max(textWidth(c.id), textWidth(value));
+  const grounds = pins.filter((p) => p.ground).map((p) => ({ x: p.x, y: p.y }));
+  return {
+    placed: {
+      id: c.id,
+      type: c.type,
+      component: c,
+      orientation: "down",
+      pins,
+      label: { id: c.id, value },
+      labelAt: { x: lx, y: y + 3, align: "start" },
+    },
+    footprint: {
+      body: rect(x - 2, y + 1, bulk ? x + 1 : x, y + 5),
+      reserved: grounds.flatMap((g) => groundCells(g.x, g.y)),
+      text: rect(lx + 0.4, y + 2, lx + w, y + 4),
+      pins: pins.map((p) => key(p.x, p.y)),
+    },
+    grounds,
+  };
 }
 
 const textWidth = (s: string) => s.length * CHAR;
@@ -331,8 +396,10 @@ function build(
   const isGround = (n: NodeName) => circuit.isGround(n);
   const comps = circuit.components;
   const twoTerms = comps.filter(
-    (c): c is TwoTerminal => c.type !== "opamp" && c.type !== "coupling",
+    (c): c is TwoTerminal =>
+      c.type !== "opamp" && c.type !== "coupling" && c.type !== "bjt" && c.type !== "mosfet",
   );
+  const transistors = comps.filter((c): c is Transistor => c.type === "bjt" || c.type === "mosfet");
   const opamps = comps.filter((c): c is ComponentJSON & { type: "opamp" } => c.type === "opamp");
   const nodes = circuit.nodes.filter((n) => !isGround(n));
 
@@ -347,6 +414,12 @@ function build(
   for (const o of opamps) {
     link(o.nodes[0], o.nodes[2]);
     link(o.nodes[1], o.nodes[2]);
+  }
+  for (const t of transistors) {
+    const { top, bottom } = transistorEnds(t);
+    link(t.nodes[1], top);
+    link(t.nodes[1], bottom);
+    link(top, bottom);
   }
   const rootSource = twoTerms.find(
     (c) =>
@@ -401,6 +474,20 @@ function build(
     else addEdge(b, a, false);
   }
   for (const [out, ins] of inputsOf) for (const i of ins) addEdge(i, out, true);
+  // Transistors: the controlled terminals come after the base / gate (when
+  // discovered after it), and the bottom terminal after the top one.
+  for (const t of transistors) {
+    const { top, bottom } = transistorEnds(t);
+    const ctrl = t.nodes[1];
+    for (const n of [top, bottom]) {
+      if (!isGround(ctrl) && !isGround(n) && n !== ctrl && ord(n) > ord(ctrl))
+        addEdge(ctrl, n, true);
+    }
+    if (!isGround(top) && !isGround(bottom) && top !== bottom) {
+      if (ord(top) < ord(bottom)) addEdge(top, bottom, false);
+      else addEdge(bottom, top, false);
+    }
+  }
 
   // Topological order (Kahn), breaking cycles by discovery order.
   const indeg = new Map(nodes.map((n) => [n, preds.get(n)?.length ?? 0]));
@@ -463,11 +550,35 @@ function build(
     const g = c.nodes.filter(isGround).length;
     if (g === 1) shunts.get(c.nodes.find((n) => !isGround(n)) as NodeName)?.push(c);
   }
+  // Node each transistor hangs from: its top terminal, else the bottom one, else
+  // the control; supply rails (sources to ground) come last.
+  const supplies = new Set(
+    twoTerms
+      .filter((c) => (c.type === "vsource" || c.type === "isource") && c.nodes.some(isGround))
+      .flatMap((c) => c.nodes.filter((n) => !isGround(n))),
+  );
+  const hangOf = (t: Transistor): NodeName | undefined => {
+    const { top, bottom } = transistorEnds(t);
+    const ends = [top, bottom].filter((n) => !isGround(n));
+    return (
+      ends.find((n) => !supplies.has(n)) ??
+      ends[0] ??
+      (isGround(t.nodes[1]) ? undefined : t.nodes[1])
+    );
+  };
+  const hanging = new Map<NodeName, number>();
+  for (const t of transistors) {
+    const n = hangOf(t);
+    if (n !== undefined) hanging.set(n, (hanging.get(n) ?? 0) + 1);
+  }
   const colX: number[] = [];
   let x = 0;
   columns.forEach((members, i) => {
     colX[i] = x;
-    const k = Math.max(1, ...members.map((n) => shunts.get(n)?.length ?? 0));
+    const k = Math.max(
+      1,
+      ...members.map((n) => (shunts.get(n)?.length ?? 0) + (hanging.get(n) ?? 0)),
+    );
     x += 6 + SHUNT_STEP * k;
   });
   // Op-amp outputs sit one cell below the inverting input (or above the
@@ -549,6 +660,23 @@ function build(
   for (const o of opamps) {
     const out = isGround(o.nodes[2]) ? { x: 10, y: 0 } : anchor(o.nodes[2]);
     place((dx, dy) => opamp(o, out.x - 2 + dx, out.y + dy, isGround, showValue), spiral(1, 5));
+  }
+
+  // Transistors hang under their top node (or sit above their bottom node).
+  for (const t of transistors) {
+    const n = hangOf(t);
+    const { top, bottom } = transistorEnds(t);
+    const a = n === undefined ? { x: 0, y: 0 } : anchor(n);
+    const offsets: [number, number][] = [];
+    for (let k = 0; k < 8; k++) offsets.push([k * SHUNT_STEP, 0]);
+    offsets.push(...spiral(SHUNT_STEP, ROW).slice(1));
+    const origin =
+      n === top
+        ? { x: a.x, y: a.y + 2 }
+        : n === bottom
+          ? { x: a.x, y: a.y - 8 }
+          : { x: a.x + 3, y: a.y - 1 };
+    place((dx, dy) => transistor(t, origin.x + dx, origin.y + dy, isGround, showValue), offsets);
   }
 
   // Grounded components hang under their node, sources first.

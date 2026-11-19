@@ -18,7 +18,7 @@ describe("validateCircuit", () => {
     expect(validateCircuit(null)[0]?.code).toBe("MALFORMED");
     expect(validateCircuit({ components: [] })[0]?.code).toBe("EMPTY_CIRCUIT");
     expect(validateCircuit({ components: [42] })[0]?.code).toBe("MALFORMED");
-    expect(validateCircuit({ components: [{ id: "Q1", type: "bjt" }] })[0]?.code).toBe(
+    expect(validateCircuit({ components: [{ id: "J1", type: "jfet" }] })[0]?.code).toBe(
       "UNKNOWN_TYPE",
     );
     expect(

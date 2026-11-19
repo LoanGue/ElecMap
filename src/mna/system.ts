@@ -4,7 +4,7 @@ import type { ComponentJSON, NodeName } from "../format/types";
 import { Complex } from "../math/complex";
 import { Polynomial } from "../math/polynomial";
 import { modelOf } from "./models";
-import type { FormContext, LinearForm, LoadContext, StampContext } from "./models";
+import type { FormContext, LinearForm, LoadContext, StampContext, Terminal } from "./models";
 
 /** Value assigned to each independent source for a given analysis. */
 export type SourceValues = (component: ComponentJSON) => number | Complex;
@@ -54,10 +54,13 @@ export class MnaSystem {
     const branches = new Map<string, number>();
     const unknowns = circuit.nodes.map((n) => `V(${n})`);
     for (const c of circuit.components) {
-      if (modelOf(c).branches(c) > 0) {
-        branches.set(c.id, unknowns.length);
-        unknowns.push(`I(${c.id})`);
-      }
+      const model = modelOf(c);
+      const count = model.branches(c);
+      if (count === 0) continue;
+      branches.set(c.id, unknowns.length);
+      unknowns.push(`I(${c.id})`);
+      for (let i = 1; i < count; i++)
+        unknowns.push(`I(${c.id}${model.branchSuffixes?.[i - 1] ?? `#${i}`})`);
     }
     this.branches = branches;
     this.unknowns = unknowns;
@@ -231,8 +234,16 @@ export class MnaSystem {
     return { terms, sources: [] };
   }
 
-  /** Linear form of the current through a component (first node → second node). */
+  /**
+   * Linear form of the current through a component (first node → second node).
+   * For a transistor, `"Q1"` is the collector (drain) current and `"Q1:b"` /
+   * `"Q1:base"` the current flowing into one terminal.
+   */
   currentForm(id: string): LinearForm {
+    const sep = id.lastIndexOf(":");
+    if (sep > 0 && !this.circuit.hasComponent(id) && this.circuit.hasComponent(id.slice(0, sep))) {
+      return this.terminalForm(id.slice(0, sep), id.slice(sep + 1));
+    }
     const c = this.circuit.component(id);
     if (c.type === "coupling") {
       throw new ElecMapError("INVALID_ARGUMENT", `"${id}" is a coupling and carries no current`, {
@@ -245,6 +256,57 @@ export class MnaSystem {
       component: (k) => this.circuit.component(k),
     };
     return modelOf(c).current(c, ctx);
+  }
+
+  /**
+   * Terminals of a multi-terminal device (transistor), with the current flowing
+   * into each one; `undefined` for other components.
+   */
+  terminals(id: string): Terminal[] | undefined {
+    const c = this.circuit.component(id);
+    return modelOf(c).terminals?.(c, this.formContext());
+  }
+
+  /**
+   * Power terms of a component: absorbed power `Σ v·i` with each `v` a voltage form
+   * and each `i` the current form it multiplies.
+   */
+  powerTerms(id: string): { v: LinearForm; i: LinearForm }[] {
+    const c = this.circuit.component(id);
+    if (c.type === "coupling") return [];
+    const terminals = this.terminals(id);
+    if (terminals) return terminals.map((t) => ({ v: this.voltageForm(t.node), i: t.form }));
+    if (c.type === "opamp") return [{ v: this.voltageForm(c.nodes[2]), i: this.currentForm(id) }];
+    return [{ v: this.voltageForm(c.nodes[0], c.nodes[1]), i: this.currentForm(id) }];
+  }
+
+  private terminalForm(id: string, name: string): LinearForm {
+    const terminals = this.terminals(id);
+    if (!terminals) {
+      throw new ElecMapError(
+        "INVALID_ARGUMENT",
+        `"${id}" has no terminal currents ("${id}:${name}"): use current("${id}")`,
+        { componentId: id },
+      );
+    }
+    const key = name.toLowerCase();
+    const t = terminals.find((x) => x.name === key || x.alias === key);
+    if (!t) {
+      throw new ElecMapError(
+        "INVALID_ARGUMENT",
+        `"${id}" has no terminal "${name}" (expected ${terminals.map((x) => x.name).join(", ")})`,
+        { componentId: id },
+      );
+    }
+    return t.form;
+  }
+
+  private formContext(): FormContext {
+    return {
+      node: (n) => this.node(n),
+      branch: (k) => this.branch(k),
+      component: (k) => this.circuit.component(k),
+    };
   }
 
   /** Evaluates a linear form for a solution `x` at complex frequency `s`. */
