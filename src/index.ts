@@ -8,6 +8,7 @@
  * @document ../docs/.build/literal-transfer-functions.md
  * @document ../docs/.build/impedances-equivalents.md
  * @document ../docs/.build/time-domain.md
+ * @document ../docs/.build/diodes.md
  * @document ../docs/.build/schematics.md
  * @document ../docs/.build/format.md
  * @document ../docs/.build/components.md

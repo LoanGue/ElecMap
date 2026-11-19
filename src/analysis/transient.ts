@@ -4,6 +4,8 @@ import { RealLU } from "../math/linear";
 import type { LinearForm } from "../mna/models";
 import type { MnaSystem, SourceValues } from "../mna/system";
 import { operatingPoint } from "./dc";
+import { newtonSolve } from "./newton";
+import type { DeviceStates } from "./newton";
 import type { Signal, WaveformContext } from "./waveforms";
 import { signalValue, sourceSignal } from "./waveforms";
 
@@ -86,11 +88,16 @@ export class TransientResult {
 }
 
 /**
- * Transient (time-domain) analysis of a linear circuit with fixed time step:
- * `C·x'(t) + G·x(t) = b(t)`.
+ * Transient (time-domain) analysis with fixed time step:
+ * `C·x'(t) + G·x(t) + f(x(t)) = b(t)`, where `f` is the current of the
+ * non-linear devices (none for a linear circuit).
  *
  * The first step uses backward Euler (which also makes `"ic"` starts consistent),
- * the following ones the chosen method. The matrices are factorised once per method.
+ * the following ones the chosen method. For a linear circuit the matrices are
+ * factorised once per method; otherwise every step is solved by Newton-Raphson,
+ * starting from the previous time point.
+ *
+ * @throws {@link ElecMapError} `NO_CONVERGENCE` if Newton-Raphson fails at a time step
  */
 export function transient(system: MnaSystem, options: TransientOptions): TransientResult {
   const { tStop } = options;
@@ -135,6 +142,26 @@ export function transient(system: MnaSystem, options: TransientOptions): Transie
     C.map((row) => row.reduce((acc, c, j) => (c === 0 ? acc : acc + c * (x[j] as number)), 0));
   const mulG = (x: readonly number[]) =>
     G.map((row) => row.reduce((acc, g, j) => (g === 0 ? acc : acc + g * (x[j] as number)), 0));
+  // Linear solver of a step matrix, or Newton-Raphson when the circuit has devices.
+  const states: DeviceStates = new Map();
+  type Solve = (b: number[], guess: readonly number[], t: number) => number[];
+  const solver = (A: number[][], tolerance?: number): Solve => {
+    if (system.linear) {
+      const lu = new RealLU(A, tolerance);
+      return (b) => lu.solve(b);
+    }
+    return (b, guess, t) => {
+      const r = newtonSolve(system, A, b, guess, states);
+      if (!r) {
+        throw new ElecMapError(
+          "NO_CONVERGENCE",
+          `Transient analysis did not converge at t = ${t} s (try a smaller tStep)`,
+          { time: t },
+        );
+      }
+      return r.x;
+    };
+  };
   const combine = (a: number, alpha: number) =>
     G.map((row, i) =>
       row.map((g, j) => a * ((C[i] as readonly number[])[j] as number) + alpha * g),
@@ -162,28 +189,38 @@ export function transient(system: MnaSystem, options: TransientOptions): Transie
     q0 = initialCharge(system);
     // Consistent x(0+): backward Euler with a vanishing step enforces C·x = q0 and the algebraic equations.
     const eps = h * 1e-6;
-    const lu0 = new RealLU(combine(1 / eps, 1), 0);
+    const solve0 = solver(combine(1 / eps, 1), 0);
     const b0 = rhsAt(0);
-    xs.push(lu0.solve(b0.map((b, i) => b + (q0[i] as number) / eps)));
+    xs.push(
+      solve0(
+        b0.map((b, i) => b + (q0[i] as number) / eps),
+        new Array<number>(n).fill(0),
+        0,
+      ),
+    );
     q0 = mulC(xs[0] as number[]);
   }
 
   // First step: backward Euler. C(x1 − x0)/h + G x1 = b1.
-  const luEuler = new RealLU(combine(1 / h, 1));
+  const euler = solver(combine(1 / h, 1));
   const qs: number[][] = [q0];
   const t1 = Math.min(h, tStop);
   {
     const b = rhsAt(t1);
-    const x1 = luEuler.solve(b.map((bi, i) => bi + (q0[i] as number) / h));
+    const x1 = euler(
+      b.map((bi, i) => bi + (q0[i] as number) / h),
+      xs[0] as number[],
+      t1,
+    );
     xs.push(x1);
     qs.push(mulC(x1));
     times.push(t1);
   }
 
-  let lu: RealLU;
-  if (method === "euler") lu = luEuler;
-  else if (method === "gear2") lu = new RealLU(combine(3 / (2 * h), 1));
-  else lu = new RealLU(combine(1 / h, 0.5));
+  let step: Solve;
+  if (method === "euler") step = euler;
+  else if (method === "gear2") step = solver(combine(3 / (2 * h), 1));
+  else step = solver(combine(1 / h, 0.5));
 
   for (let k = 2; k <= steps; k++) {
     const t = Math.min(k * h, tStop);
@@ -202,7 +239,7 @@ export function transient(system: MnaSystem, options: TransientOptions): Transie
         (bi, i) => 0.5 * (bi + (bPrev[i] as number) - (gx[i] as number)) + (qn[i] as number) / h,
       );
     }
-    const x = lu.solve(rhs);
+    const x = step(rhs, xs[k - 1] as number[], t);
     xs.push(x);
     qs.push(mulC(x));
     times.push(t);

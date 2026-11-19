@@ -1,4 +1,5 @@
 import type { ComponentJSON, ComponentType, NodeName } from "../format/types";
+import { diodeCurrent, diodeParams, limitDiode } from "./devices";
 
 /**
  * One term `(g + s·c) · x[index]` of a {@link LinearForm}.
@@ -54,6 +55,35 @@ export interface SourceIncidence {
 }
 
 /**
+ * Interface given to non-linear models to write their linearisation at the
+ * current Newton iterate: `J·x = b` rows replacing the device equations.
+ */
+export interface LoadContext {
+  node(name: NodeName): number;
+  branch(id: string): number;
+  /** Current iterate (MNA unknown vector). */
+  readonly x: readonly number[];
+  /** Adds `value` to the Jacobian entry `[row][col]` (ignored for ground). */
+  addJ(row: number, col: number, value: number): void;
+  /** Adds `value` to the right-hand side `b[row]`. */
+  addB(row: number, value: number): void;
+  /**
+   * Memory of this device across iterations (previous junction voltages), or
+   * `undefined` when no limiting is wanted (small-signal linearisation).
+   */
+  readonly state: Record<string, number> | undefined;
+  /**
+   * First iteration of a solve started from scratch: junctions start at their
+   * default guess instead of the (meaningless) voltages of `x`.
+   */
+  readonly initial: boolean;
+  /** Tells the solver that a voltage was limited: the iterate cannot be accepted yet. */
+  limited(): void;
+  /** Conductance placed across every junction (S). */
+  readonly gmin: number;
+}
+
+/**
  * MNA model of a component type: how many extra unknowns (branch currents) it
  * needs, how it stamps `G` and `C` (the system is `(G + s·C)·x = b`), how its
  * current is expressed, and — for independent sources — where its value goes
@@ -67,6 +97,12 @@ export interface ComponentModel<T extends ComponentJSON = ComponentJSON> {
   current(c: T, ctx: FormContext): LinearForm;
   /** Right-hand-side incidence of an independent source. */
   source?(c: T, ctx: StampContext): SourceIncidence;
+  /**
+   * Non-linear devices only: stamps the Newton linearisation of the device at
+   * `ctx.x`. The device equations live in its own branch rows, which
+   * {@link ComponentModel.stamp} leaves empty.
+   */
+  load?(c: T, ctx: LoadContext): void;
 }
 
 const term = (index: number, g: number, c = 0): LinearTerm => ({ index, g, c });
@@ -114,7 +150,7 @@ function switchMode(c: Extract<ComponentJSON, { type: "switch" }>): "short" | "r
   return c.roff ? "resistor" : "open";
 }
 
-/** Built-in MNA models of every linear component type. */
+/** Built-in MNA models of every component type. */
 export const MODELS: ModelMap = {
   resistor: {
     branches: () => 0,
@@ -281,6 +317,45 @@ export const MODELS: ModelMap = {
       if (mode === "open") return form([]);
       const r = (c.closed ? c.ron : c.roff) as number;
       return admittanceForm(ctx.node(c.nodes[0]), ctx.node(c.nodes[1]), 1 / r, 0);
+    },
+  },
+
+  diode: {
+    // Branch current I (anode → cathode), equation I = Id(Va − Vk − rs·I), linearised
+    // around Vj₀: (1 + gd·rs)·I − gd·Va + gd·Vk = Id(Vj₀) − gd·Vj₀.
+    branches: () => 1,
+    stamp(c, ctx) {
+      const [a, k, b] = [ctx.node(c.nodes[0]), ctx.node(c.nodes[1]), ctx.branch(c.id)];
+      stampBranchIncidence(ctx, b, a, k);
+      if (c.cjo) stampAdmittance(ctx, a, k, 0, c.cjo);
+    },
+    current(c, ctx) {
+      const [a, k, b] = [ctx.node(c.nodes[0]), ctx.node(c.nodes[1]), ctx.branch(c.id)];
+      const cj = c.cjo ?? 0;
+      return form(cj ? [term(b, 1), term(a, 0, cj), term(k, 0, -cj)] : [term(b, 1)]);
+    },
+    load(c, ctx) {
+      const p = diodeParams(c);
+      const [a, k, b] = [ctx.node(c.nodes[0]), ctx.node(c.nodes[1]), ctx.branch(c.id)];
+      const at = (i: number) => (i < 0 ? 0 : (ctx.x[i] as number));
+      let vj = at(a) - at(k) - p.rs * at(b);
+      if (ctx.state) {
+        const old = ctx.state["vj"];
+        if (ctx.initial) vj = p.vcrit;
+        else if (old !== undefined) {
+          const r = limitDiode(vj, old, p);
+          if (r.limited) ctx.limited();
+          vj = r.v;
+        }
+        ctx.state["vj"] = vj;
+      }
+      const d = diodeCurrent(vj, p);
+      const g = d.g + ctx.gmin;
+      const i = d.i + ctx.gmin * vj;
+      ctx.addJ(b, b, 1 + g * p.rs);
+      ctx.addJ(b, a, -g);
+      ctx.addJ(b, k, g);
+      ctx.addB(b, i - g * vj);
     },
   },
 };

@@ -47,6 +47,13 @@ Le courant de commande de `cccs` / `ccvs` est le courant qui traverse une source
 - **Amplificateur opérationnel :** idéal (court-circuit virtuel entre les entrées, impédance d'entrée infinie, impédance de sortie nulle) lorsque `gain` est omis. Avec `gain`, la sortie vaut `A·(V+ − V−)` ; ajouter `gbw` donne un modèle à un pôle `A / (1 + s·A/(2π·GBW))`. La sortie est référencée à la masse.
 - **Interrupteur :** un interrupteur à état fixe, utile pour comparer des configurations. Il n'est pas commandé en tension.
 
-## Prévus (non linéaires)
+## Composants non linéaires
 
-Les diodes, diodes Zener, transistors bipolaires et MOSFET (avec des cartes `.model`) arriveront avec le solveur non linéaire.
+| Type    | SPICE        | `nodes`            | Champs                                                                      |
+| ------- | ------------ | ------------------ | --------------------------------------------------------------------------- |
+| `diode` | `D… [model]` | `[anode, cathode]` | `model?`, `is?`, `n?`, `rs?`, `bv?`, `ibv?`, `nbv?`, `cjo?` (défauts SPICE) |
+
+- **Diode :** loi de Shockley avec résistance série `rs` ; avec `bv`, elle claque en inverse (Zener). `cjo` est une capacité de jonction constante. Les paramètres viennent en général d'une carte `.model NOM D(...)`. Le courant est compté de l'anode vers la cathode. Voir le [guide des diodes](./diodes.md).
+- Les circuits avec une diode sont résolus par Newton-Raphson ; les analyses petits signaux utilisent le circuit linéarisé au point de fonctionnement continu.
+
+Les transistors bipolaires et MOSFET suivront.

@@ -12,6 +12,17 @@ export class DcSolution {
     private readonly values: SourceValues,
     /** True if a small conductance to ground had to be added to make the system solvable. */
     readonly gminUsed: boolean,
+    /**
+     * Newton-Raphson iterations used (0 for a linear circuit, solved directly).
+     *
+     * @example
+     * ```ts
+     * new ElecMap("V1 a 0 5
+R1 a b 1k
+D1 b 0").operatingPoint().iterations; // 5
+     * ```
+     */
+    readonly iterations = 0,
   ) {}
 
   /** Voltage `V(a) − V(b)` in volts (`b` defaults to ground). */

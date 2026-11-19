@@ -93,6 +93,12 @@ export class SymbolicSystem {
     readonly system: MnaSystem,
     options: SymbolicOptions = {},
   ) {
+    if (system.nonlinear.length > 0) {
+      throw new ElecMapError(
+        "UNSUPPORTED",
+        `Symbolic analysis of a non-linear circuit (${system.nonlinear.map((c) => c.id).join(", ")}) is not supported: use the numeric transferFunction, linearised at the operating point`,
+      );
+    }
     const ids = system.circuit.components.map((c) => c.id);
     for (const id of options.symbols ?? []) {
       if (!ids.includes(id)) {

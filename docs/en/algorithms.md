@@ -4,14 +4,14 @@ This document describes the numerical methods used by ElecMap.
 
 ## Math core (`src/math`)
 
-| Building block        | Method                                                                        | Notes                                                                                                                                                                   |
-| --------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Complex`             | Immutable `re + j·im`                                                         | Division uses Smith's algorithm to avoid overflow.                                                                                                                      |
-| `Polynomial`          | Real coefficients in ascending powers of `s`                                  | Additions flush catastrophic-cancellation residue (`                                                                                                                    | a+b | ≤ 1e-13·( | a   | +   | b   | )`) to exactly 0, so that symbolic-like identities hold, while legitimately tiny coefficients (e.g. `LC = 1e-12`) are preserved. |
-| `Rational`            | `N(s) / D(s)`                                                                 | Transfer functions and impedances. Normalisable to the engineering form `… / (1 + a·s + …)`.                                                                            |
-| `RealLU`, `ComplexLU` | Dense LU with partial pivoting                                                | Factor once, solve many right-hand sides (transient analysis). Singularity is detected relative to the largest matrix entry.                                            |
-| `bareissDeterminant`  | Fraction-free Bareiss elimination over a generic `Ring<T>`                    | With the polynomial ring it yields `det(A(s))` exactly; transfer functions follow from Cramer's rule on the MNA matrix. The same code will run on symbolic polynomials. |
-| `polynomialRoots`     | Closed forms up to degree 2, Aberth–Ehrlich iteration above, Newton polishing | Used for poles and zeros. Real roots are returned with an exactly zero imaginary part.                                                                                  |
+| Building block        | Method                                                                        | Notes                                                                                                                                                                                                                   |
+| --------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Complex`             | Immutable `re + j·im`                                                         | Division uses Smith's algorithm to avoid overflow.                                                                                                                                                                      |
+| `Polynomial`          | Real coefficients in ascending powers of `s`                                  | Additions flush catastrophic-cancellation residue (`abs(a + b) ≤ 1e-13·(abs(a) + abs(b))`) to exactly 0, so that symbolic-like identities hold, while legitimately tiny coefficients (e.g. `LC = 1e-12`) are preserved. |
+| `Rational`            | `N(s) / D(s)`                                                                 | Transfer functions and impedances. Normalisable to the engineering form `… / (1 + a·s + …)`.                                                                                                                            |
+| `RealLU`, `ComplexLU` | Dense LU with partial pivoting                                                | Factor once, solve many right-hand sides (transient analysis). Singularity is detected relative to the largest matrix entry.                                                                                            |
+| `bareissDeterminant`  | Fraction-free Bareiss elimination over a generic `Ring<T>`                    | With the polynomial ring it yields `det(A(s))` exactly; transfer functions follow from Cramer's rule on the MNA matrix. The same code will run on symbolic polynomials.                                                 |
+| `polynomialRoots`     | Closed forms up to degree 2, Aberth–Ehrlich iteration above, Newton polishing | Used for poles and zeros. Real roots are returned with an exactly zero imaginary part.                                                                                                                                  |
 
 ## Modified Nodal Analysis
 
@@ -35,6 +35,20 @@ Every analysis works on the system `(G + s·C)·x = b`, assembled once per circu
 The same matrices are evaluated at `s = 0` (DC, real LU), `s = jω` (AC, complex LU) or kept as a polynomial matrix in `s` (transfer functions). Any quantity (voltage between two nodes, current through a component) is a _linear form_ `Σ (g + s·c)·x` evaluated on the solution.
 
 When the DC system is singular because a node has no DC path (behind series capacitors), a `gmin = 1e-12 S` conductance to ground is added, as in SPICE; `DcSolution.gminUsed` reports it.
+
+## Non-linear circuits
+
+A non-linear device adds a `load` step to its MNA stamp. A diode has its own branch current `I` as an unknown: its KCL incidence sits in G (and `CJO` in C), and its branch row is filled at each Newton iteration with the tangent of the Shockley law at the current iterate `V_j⁰`:
+
+<div class="em-math">(1 + g\,R_S)\,I - g\,V_A + g\,V_K = I_d(V_j^0) - g\,V_j^0, \qquad g = \frac{\partial I_d}{\partial V_j}(V_j^0)</div>
+
+The device equation is algebraic (it is not scaled by the integration method), and the current is a linear form like any other.
+
+- **Newton-Raphson.** Each iteration rebuilds `G + J` and solves it by LU. An iterate is accepted when every voltage moves by less than `reltol·|v| + vntol` and every current by less than `reltol·|i| + abstol`, after at least two iterations and with no device limited; one last step is then taken from the accepted point, which, Newton being quadratic, makes the result accurate far below the tolerances.
+- **Limiting.** As in SPICE (`pnjlim`), a junction voltage step above the critical voltage `V_crit = N·V_T·ln(N·V_T / (√2·I_S))` is replaced by a logarithmic one; the breakdown branch is limited the same way. On the first iteration every junction starts at `V_crit`. `gmin = 1e-12 S` sits across each junction, and exponentials are continued linearly beyond `e^80` to avoid overflow.
+- **DC homotopies.** If plain Newton fails: **gmin stepping** (a conductance from every node to ground, from 10 mS down to 0, each solve starting from the previous one), then **source stepping** (all independent sources scaled from 0 to 1 with an adaptive step). Otherwise `NO_CONVERGENCE` is thrown.
+- **Transient.** Each time step is a Newton solve on the companion system `(α·C + G)`, starting from the previous point; device states (last junction voltages) are carried from step to step.
+- **Small signal.** `system.smallSignal(x)` builds a new linear `MnaSystem` whose G includes the Jacobian at `x` (the operating point). Every frequency-domain analysis runs on it unchanged. The literal (symbolic) engine refuses non-linear circuits.
 
 ## Transfer functions
 
