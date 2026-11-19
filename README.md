@@ -46,7 +46,7 @@ c.toSVG(); // standalone <svg> schematic
 | Time domain    | Exact step/impulse/arbitrary-input responses of H(s); transient simulation (trapezoidal, Gear-2, Euler)         |
 | Schematics     | Automatic SVG layout and routing, IEC or ANSI symbols, light/dark themes, interactive `data-*` attributes       |
 
-Components: R, L, C, coupled inductors / transformers, independent V and I sources (DC, AC, sine, pulse, PWL, exp), the four controlled sources (E, F, G, H), op-amps (ideal, finite gain, single-pole GBW), fixed-state switches, and diodes / Zener diodes with SPICE `.model` cards (solved by Newton-Raphson, see the [diodes guide](./docs/en/diodes.md)).
+Components: R, L, C, coupled inductors / transformers, independent V and I sources (DC, AC, sine, pulse, PWL, exp), the four controlled sources (E, F, G, H), op-amps (ideal, finite gain, single-pole GBW), fixed-state switches, diodes / Zener diodes, bipolar transistors (Ebers-Moll) and MOSFETs (level 1) with SPICE `.model` cards, solved by Newton-Raphson (see the [diodes](./docs/en/diodes.md) and [transistors](./docs/en/transistors.md) guides).
 
 ## Examples
 
@@ -213,12 +213,12 @@ c.layout(); // the placement itself: components, pins, wire segments, junctions,
 
 The layout is computed from scratch, without any external library: nodes are ordered into columns from the source to the output, shunt elements hang vertically to individual ground symbols, series elements run horizontally and feedback branches go above; wires are then routed on a grid by an A* maze router that forbids overlaps and only allows perpendicular crossings. Every element carries `data-id` / `data-node` / `data-type` attributes so a host page can make the drawing interactive. Details in [algorithms](./docs/en/algorithms.md#schematic-layout).
 
-Supported components: R, C, L, coupled inductors (K), independent V/I sources, the four controlled sources (E, G, F, H), op-amps (ideal, finite gain, single-pole GBW), fixed-state switches and diodes (D, with `.model`). See [algorithms](./docs/en/algorithms.md#modified-nodal-analysis) for how they are stamped.
+Supported components: R, C, L, coupled inductors (K), independent V/I sources, the four controlled sources (E, G, F, H), op-amps (ideal, finite gain, single-pole GBW), fixed-state switches, diodes (D), bipolar transistors (Q) and MOSFETs (M), with `.model` cards. See [algorithms](./docs/en/algorithms.md#modified-nodal-analysis) for how they are stamped.
 
 ## Limitations
 
-- Non-linear components: diodes only for now (no transistors yet); the junction capacitance is constant. Switches have a fixed state.
-- `.model` supports diodes (`D`) only; no `.subckt` / `.include`: netlists must be flat.
+- Non-linear components: diodes, BJTs (Ebers-Moll with Early effect) and level-1 MOSFETs; their capacitances are constant. Switches have a fixed state.
+- `.model` supports `D`, `NPN`, `PNP`, `NMOS`, `PMOS` (level 1); no `.subckt` / `.include` yet: netlists must be flat.
 - Literal transfer functions are linear-only: a circuit with a diode gives its numeric, linearised transfer function only.
 - Literal transfer functions remove common monomial factors only; a pole/zero cancellation that holds for every component value may leave the expression one order higher than the numeric one. They are limited to about 30 unknowns (use `symbols` to keep only some components literal).
 - Dense linear algebra: comfortable up to a few hundred nodes.
@@ -237,7 +237,7 @@ Supported components: R, C, L, coupled inductors (K), independent V/I sources, t
 10. ✅ Symbolic transfer functions
 11. ✅ Documentation, examples, packaging checks
 12. First npm release (v0.1.0)
-13. Non-linear components: 🚧 diodes and Newton-Raphson ✅, BJT, MOSFET; `.subckt`, sensitivities
+13. Non-linear components: 🚧 diodes and Newton-Raphson ✅, BJT and MOSFET ✅; `.subckt`, sensitivities
 
 ## Development
 

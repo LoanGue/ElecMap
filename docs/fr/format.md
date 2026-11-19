@@ -41,22 +41,26 @@ Exemples : `1k`, `4.7u`, `100nF`, `1e-3`, `2MEG`. La notation européenne est é
 
 ### Éléments
 
-| Ligne                                        | Composant                                        |
-| -------------------------------------------- | ------------------------------------------------ |
-| `Rname n1 n2 value`                          | résistance (Ω)                                   |
-| `Cname n1 n2 value [IC=v]`                   | condensateur (F), tension initiale               |
-| `Lname n1 n2 value [IC=i]`                   | bobine (H), courant initial                      |
-| `Vname n+ n- [DC v] [AC mag [phase]] [wave]` | source de tension indépendante                   |
-| `Iname n+ n- [DC i] [AC mag [phase]] [wave]` | source de courant indépendante                   |
-| `Ename n+ n- nc+ nc- gain`                   | source de tension commandée en tension           |
-| `Gname n+ n- nc+ nc- gm`                     | source de courant commandée en tension           |
-| `Fname n+ n- Vctrl gain`                     | source de courant commandée en courant           |
-| `Hname n+ n- Vctrl r`                        | source de tension commandée en courant           |
-| `Kname L1 L2 k`                              | bobines couplées, `0 < k ≤ 1`                    |
-| `Xname in+ in- out OPAMP [GAIN=a] [GBW=f]`   | amplificateur opérationnel _(extension ElecMap)_ |
-| `Sname n1 n2 ON\|OFF [RON=r] [ROFF=r]`       | interrupteur à état fixe _(extension ElecMap)_   |
-| `Dname anode cathode [model] [area] [K=v…]`  | diode, Zener (voir [diodes](./diodes.md))        |
-| `.model name D(IS=… N=… RS=… BV=…)`          | carte de modèle de diode                         |
+| Ligne                                        | Composant                                                   |
+| -------------------------------------------- | ----------------------------------------------------------- |
+| `Rname n1 n2 value`                          | résistance (Ω)                                              |
+| `Cname n1 n2 value [IC=v]`                   | condensateur (F), tension initiale                          |
+| `Lname n1 n2 value [IC=i]`                   | bobine (H), courant initial                                 |
+| `Vname n+ n- [DC v] [AC mag [phase]] [wave]` | source de tension indépendante                              |
+| `Iname n+ n- [DC i] [AC mag [phase]] [wave]` | source de courant indépendante                              |
+| `Ename n+ n- nc+ nc- gain`                   | source de tension commandée en tension                      |
+| `Gname n+ n- nc+ nc- gm`                     | source de courant commandée en tension                      |
+| `Fname n+ n- Vctrl gain`                     | source de courant commandée en courant                      |
+| `Hname n+ n- Vctrl r`                        | source de tension commandée en courant                      |
+| `Kname L1 L2 k`                              | bobines couplées, `0 < k ≤ 1`                               |
+| `Xname in+ in- out OPAMP [GAIN=a] [GBW=f]`   | amplificateur opérationnel _(extension ElecMap)_            |
+| `Sname n1 n2 ON\|OFF [RON=r] [ROFF=r]`       | interrupteur à état fixe _(extension ElecMap)_              |
+| `Dname anode cathode [model] [area] [K=v…]`  | diode, Zener (voir [diodes](./diodes.md))                   |
+| `.model name D(IS=… N=… RS=… BV=…)`          | carte de modèle de diode                                    |
+| `Qname c b e [sub] [model] [area] [K=v…]`    | transistor bipolaire (voir [transistors](./transistors.md)) |
+| `Mname d g s [b] model [W=w] [L=l] [K=v…]`   | MOSFET, substrat relié à la source s'il est omis            |
+| `.model name NPN                             | PNP(IS=… BF=… VAF=…)`                                       | carte de modèle bipolaire         |
+| `.model name NMOS                            | PMOS(VTO=… KP=… LAMBDA=…)`                                  | carte de modèle MOSFET (niveau 1) |
 
 Un nombre seul après les nœuds d'une source est sa valeur continue (`V1 a 0 5`). Les phases sont en degrés.
 

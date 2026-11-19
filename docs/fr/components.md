@@ -49,11 +49,16 @@ Le courant de commande de `cccs` / `ccvs` est le courant qui traverse une source
 
 ## Composants non linéaires
 
-| Type    | SPICE        | `nodes`            | Champs                                                                      |
-| ------- | ------------ | ------------------ | --------------------------------------------------------------------------- |
-| `diode` | `D… [model]` | `[anode, cathode]` | `model?`, `is?`, `n?`, `rs?`, `bv?`, `ibv?`, `nbv?`, `cjo?` (défauts SPICE) |
+| Type     | SPICE        | `nodes`            | Champs                                                                      |
+| -------- | ------------ | ------------------ | --------------------------------------------------------------------------- |
+| `diode`  | `D… [model]` | `[anode, cathode]` | `model?`, `is?`, `n?`, `rs?`, `bv?`, `ibv?`, `nbv?`, `cjo?` (défauts SPICE) |
+| `bjt`    | `Q… [model]` | `[c, b, e]`        | `polarity` (`"npn"`                                                         | `"pnp"`), `model?`, `is?`, `bf?`, `br?`, `nf?`, `nr?`, `vaf?`, `var?`, `cje?`, `cjc?`         |
+| `mosfet` | `M… model`   | `[d, g, s, b]`     | `polarity` (`"nmos"`                                                        | `"pmos"`), `model?`, `vto?`, `kp?`, `lambda?`, `gamma?`, `phi?`, `cgso?`, `cgdo?`, `w?`, `l?` |
 
 - **Diode :** loi de Shockley avec résistance série `rs` ; avec `bv`, elle claque en inverse (Zener). `cjo` est une capacité de jonction constante. Les paramètres viennent en général d'une carte `.model NOM D(...)`. Le courant est compté de l'anode vers la cathode. Voir le [guide des diodes](./diodes.md).
 - Les circuits avec une diode sont résolus par Newton-Raphson ; les analyses petits signaux utilisent le circuit linéarisé au point de fonctionnement continu.
 
-Les transistors bipolaires et MOSFET suivront.
+- **Transistor bipolaire :** modèle de transport d'Ebers-Moll avec effet Early et capacités de jonction constantes. `current("Q1")` est le courant de collecteur ; `"Q1:b"` et `"Q1:e"` donnent les courants de base et d'émetteur, tous comptés entrant dans le composant.
+- **MOSFET :** niveau 1 de SPICE (Shichman-Hodges) avec modulation de longueur de canal et effet de substrat, symétrique entre drain et source. `current("M1")` est le courant de drain ; la grille et le substrat n'en consomment pas.
+
+Voir le [guide des transistors](./transistors.md).

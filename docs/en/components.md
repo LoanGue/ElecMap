@@ -49,11 +49,16 @@ The controlling current of `cccs` / `ccvs` is the current through an independent
 
 ## Non-linear components
 
-| Type    | SPICE        | `nodes`            | Fields                                                                       |
-| ------- | ------------ | ------------------ | ---------------------------------------------------------------------------- |
-| `diode` | `D… [model]` | `[anode, cathode]` | `model?`, `is?`, `n?`, `rs?`, `bv?`, `ibv?`, `nbv?`, `cjo?` (SPICE defaults) |
+| Type     | SPICE        | `nodes`            | Fields                                                                       |
+| -------- | ------------ | ------------------ | ---------------------------------------------------------------------------- |
+| `diode`  | `D… [model]` | `[anode, cathode]` | `model?`, `is?`, `n?`, `rs?`, `bv?`, `ibv?`, `nbv?`, `cjo?` (SPICE defaults) |
+| `bjt`    | `Q… [model]` | `[c, b, e]`        | `polarity` (`"npn"`                                                          | `"pnp"`), `model?`, `is?`, `bf?`, `br?`, `nf?`, `nr?`, `vaf?`, `var?`, `cje?`, `cjc?`         |
+| `mosfet` | `M… model`   | `[d, g, s, b]`     | `polarity` (`"nmos"`                                                         | `"pmos"`), `model?`, `vto?`, `kp?`, `lambda?`, `gamma?`, `phi?`, `cgso?`, `cgdo?`, `w?`, `l?` |
 
 - **Diode:** Shockley law with series resistance `rs`; with `bv` it breaks down in reverse (Zener). `cjo` is a constant junction capacitance. Parameters usually come from a `.model NAME D(...)` card. The current is counted from anode to cathode. See the [diodes guide](./diodes.md).
 - Circuits with a diode are solved by Newton-Raphson; small-signal analyses use the circuit linearised at the DC operating point.
 
-BJTs and MOSFETs will follow.
+- **Bipolar transistor:** Ebers-Moll transport model with Early effect and constant junction capacitances. `current("Q1")` is the collector current; `"Q1:b"` and `"Q1:e"` give the base and emitter currents, all counted into the device.
+- **MOSFET:** SPICE level 1 (Shichman-Hodges) with channel-length modulation and body effect, symmetric in drain and source. `current("M1")` is the drain current; the gate and bulk draw none.
+
+See the [transistors guide](./transistors.md).
