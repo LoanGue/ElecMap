@@ -55,6 +55,8 @@ Exemples : `1k`, `4.7u`, `100nF`, `1e-3`, `2MEG`. La notation européenne est é
 | `Kname L1 L2 k`                              | bobines couplées, `0 < k ≤ 1`                    |
 | `Xname in+ in- out OPAMP [GAIN=a] [GBW=f]`   | amplificateur opérationnel _(extension ElecMap)_ |
 | `Sname n1 n2 ON\|OFF [RON=r] [ROFF=r]`       | interrupteur à état fixe _(extension ElecMap)_   |
+| `Dname anode cathode [model] [area] [K=v…]`  | diode, Zener (voir [diodes](./diodes.md))        |
+| `.model name D(IS=… N=… RS=… BV=…)`          | carte de modèle de diode                         |
 
 Un nombre seul après les nœuds d'une source est sa valeur continue (`V1 a 0 5`). Les phases sont en degrés.
 

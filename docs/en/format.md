@@ -55,6 +55,8 @@ Examples: `1k`, `4.7u`, `100nF`, `1e-3`, `2MEG`. The European notation is suppor
 | `Kname L1 L2 k`                              | coupled inductors, `0 < k ≤ 1`           |
 | `Xname in+ in- out OPAMP [GAIN=a] [GBW=f]`   | op-amp _(ElecMap extension)_             |
 | `Sname n1 n2 ON\|OFF [RON=r] [ROFF=r]`       | fixed-state switch _(ElecMap extension)_ |
+| `Dname anode cathode [model] [area] [K=v…]`  | diode, Zener (see [diodes](./diodes.md)) |
+| `.model name D(IS=… N=… RS=… BV=…)`          | diode model card                         |
 
 A bare number after the nodes of a source is its DC value (`V1 a 0 5`). Phases are in degrees.
 

@@ -202,6 +202,36 @@ export interface SwitchJSON extends ComponentBase {
   roff?: number;
 }
 
+/**
+ * Junction diode (SPICE `D`), `nodes = [anode, cathode]`. Its current, from anode
+ * to cathode, follows the Shockley law with series resistance and optional reverse
+ * breakdown (zener):
+ *
+ * `I = is·(e^(Vj/(n·Vt)) − 1) − ibv·e^(−(Vj + bv)/(nbv·Vt))`, with `Vj = V(anode, cathode) − rs·I`
+ *
+ * and `Vt = 25.865 mV` (27 °C). Parameters left out take their SPICE default.
+ */
+export interface DiodeJSON extends ComponentBase {
+  type: "diode";
+  nodes: [NodeName, NodeName];
+  /** Name of the `.model` card the parameters come from (informative, kept for SPICE export). */
+  model?: string;
+  /** Saturation current (A, default 1e-14). */
+  is?: number;
+  /** Emission coefficient (default 1). */
+  n?: number;
+  /** Series resistance (Ω, default 0). */
+  rs?: number;
+  /** Reverse breakdown voltage (V, positive): the diode is a zener when set. */
+  bv?: number;
+  /** Current at the breakdown voltage (A, default 1e-3). */
+  ibv?: number;
+  /** Emission coefficient of the breakdown (default `n`). */
+  nbv?: number;
+  /** Junction capacitance (F, default 0), taken as constant. */
+  cjo?: number;
+}
+
 /** Any component of the canonical format. */
 export type ComponentJSON =
   | ResistorJSON
@@ -215,7 +245,8 @@ export type ComponentJSON =
   | CcvsJSON
   | OpAmpJSON
   | CouplingJSON
-  | SwitchJSON;
+  | SwitchJSON
+  | DiodeJSON;
 
 /** Discriminant of {@link ComponentJSON}. */
 export type ComponentType = ComponentJSON["type"];

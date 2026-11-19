@@ -164,9 +164,18 @@ export interface AcEquivalent {
   maxPower: number;
 }
 
-/** Thévenin / Norton equivalent seen between `a` and `b`, in DC. */
-export function theveninDc(system: MnaSystem, a: NodeName, b?: NodeName): DcEquivalent {
-  const z = impedance(system, a, b);
+/**
+ * Thévenin / Norton equivalent seen between `a` and `b`, in DC. For a
+ * non-linear circuit, pass the small-signal system: the resistance is then the
+ * incremental (dynamic) resistance at the operating point.
+ */
+export function theveninDc(
+  system: MnaSystem,
+  a: NodeName,
+  b?: NodeName,
+  smallSignal: MnaSystem = system,
+): DcEquivalent {
+  const z = impedance(smallSignal, a, b);
   const voltage = operatingPoint(system, { values: dcValues }).voltage(a, b);
   const resistance = z.dcGain();
   const current = resistance === 0 ? Math.sign(voltage) * Infinity : voltage / resistance;

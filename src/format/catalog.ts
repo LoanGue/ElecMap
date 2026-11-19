@@ -115,4 +115,19 @@ export const COMPONENT_CATALOG: Readonly<Record<ComponentType, ComponentSpec>> =
     ports: ["a", "b"],
     numbers: { ron: [false, "nonNegative"], roff: [false, "positive"] },
   },
+  diode: {
+    type: "diode",
+    letter: "D",
+    name: "Diode",
+    ports: ["anode", "cathode"],
+    numbers: {
+      is: [false, "positive"],
+      n: [false, "positive"],
+      rs: [false, "nonNegative"],
+      bv: [false, "positive"],
+      ibv: [false, "positive"],
+      nbv: [false, "positive"],
+      cjo: [false, "nonNegative"],
+    },
+  },
 };

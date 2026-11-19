@@ -7,6 +7,7 @@ export type {
   FormContext,
   LinearForm,
   LinearTerm,
+  LoadContext,
   SourceIncidence,
   StampContext,
 } from "./models";

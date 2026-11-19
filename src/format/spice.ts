@@ -17,10 +17,16 @@
  * | `Kname L1 L2 k` | coupled inductors |
  * | `Xname in+ in- out OPAMP [GAIN=a] [GBW=f]` | op-amp (ElecMap extension) |
  * | `Sname n1 n2 ON\|OFF [RON=r] [ROFF=r]` | fixed switch (ElecMap extension) |
+ * | `Dname anode cathode [model] [area] [IS=… N=… RS=… BV=…]` | diode / zener |
+ *
+ * Device parameters come from `.model name D(IS=… N=… RS=… BV=… IBV=… NBV=… CJO=…)`
+ * cards (anywhere in the netlist, names case-insensitive); parameters written on
+ * the element line override them (ElecMap extension). Unsupported model
+ * parameters are ignored with a warning.
  *
  * Comments start with `*` (whole line) or `;` / `$ ` (inline). Lines starting
- * with `+` continue the previous line. `.title`, `.end` are understood; other
- * dot-directives are ignored with a warning.
+ * with `+` continue the previous line. `.title`, `.model`, `.end` are understood;
+ * other dot-directives are ignored with a warning.
  *
  * @module
  */
@@ -31,6 +37,7 @@ import type {
   CircuitJSON,
   ComponentJSON,
   CurrentSourceJSON,
+  DiodeJSON,
   NodeName,
   VoltageSourceJSON,
   Waveform,
@@ -252,7 +259,110 @@ function acSpec(args: string[], line: number): AcSpec {
   return phase === undefined ? { mag } : { mag, phase };
 }
 
-function parseElement(text: string, line: number): ComponentJSON {
+/** A `.model` card. */
+interface ModelCard {
+  /** Name as written. */
+  name: string;
+  /** Device type, upper-cased (`D`…). */
+  type: string;
+  /** Parameters, upper-cased keys. */
+  params: Map<string, string>;
+  line: number;
+}
+
+type Models = ReadonlyMap<string, ModelCard>;
+
+/** Diode fields and their SPICE parameter names. */
+const DIODE_PARAMS = [
+  ["is", "IS"],
+  ["n", "N"],
+  ["rs", "RS"],
+  ["bv", "BV"],
+  ["ibv", "IBV"],
+  ["nbv", "NBV"],
+  ["cjo", "CJO"],
+] as const;
+
+type DiodeField = (typeof DIODE_PARAMS)[number][0];
+type DiodeCard = Partial<Record<DiodeField, number>>;
+
+const MODEL_ALIASES: Record<string, string> = { CJ0: "CJO" };
+
+function parseModel(text: string, line: number, warnings: string[]): ModelCard {
+  const tokens = tokenize(text, line).slice(1);
+  const name = tokens[0];
+  if (name?.kind !== "word") fail(".model expects a name and a type", line);
+  const typeToken = tokens[1];
+  let type: string;
+  let raw: string[];
+  if (typeToken?.kind === "group") {
+    type = typeToken.name;
+    raw = [...typeToken.args, ...words(tokens.slice(2), line)];
+  } else if (typeToken?.kind === "word") {
+    type = typeToken.value.toUpperCase();
+    raw = words(tokens.slice(2), line);
+  } else {
+    return fail(`.model ${name.value}: missing device type`, line);
+  }
+  const { positional, params } = splitParams(raw);
+  if (positional.length > 0)
+    fail(`.model ${name.value}: unexpected "${positional[0] as string}"`, line);
+  if (type !== "D") {
+    throw new ElecMapError(
+      "UNSUPPORTED",
+      `Line ${line}: .model type "${type}" is not supported (only D)`,
+      { line },
+    );
+  }
+  const known = new Set<string>(DIODE_PARAMS.map(([, k]) => k));
+  const out = new Map<string, string>();
+  for (const [k, v] of params) {
+    const key = MODEL_ALIASES[k] ?? k;
+    if (known.has(key)) out.set(key, v);
+    else warnings.push(`Line ${line}: model ${name.value}: parameter ${k} ignored`);
+  }
+  return { name: name.value, type, params: out, line };
+}
+
+function parseDiode(
+  id: string,
+  p: string[],
+  params: Map<string, string>,
+  models: Models,
+  line: number,
+): DiodeJSON {
+  if (p.length < 2 || p.length > 4) fail(`${id}: expected anode, cathode [model] [area]`, line);
+  const comp: DiodeJSON = { id, type: "diode", nodes: [p[0] as string, p[1] as string] };
+  let rest = p.slice(2);
+  if (rest[0] !== undefined && parseValue(rest[0]) === undefined) {
+    const card = models.get(rest[0].toUpperCase());
+    if (!card) fail(`${id}: unknown model "${rest[0]}"`, line);
+    comp.model = card.name;
+    for (const [field, key] of DIODE_PARAMS) {
+      const v = card.params.get(key);
+      if (v !== undefined) comp[field] = num(v, `${card.name} ${key}`, card.line);
+    }
+    rest = rest.slice(1);
+  }
+  if (rest.length > 1) fail(`${id}: unexpected "${rest[1] as string}"`, line);
+  const area = rest[0] === undefined ? 1 : num(rest[0], `${id} area`, line);
+  const fields = new Map<string, DiodeField>(DIODE_PARAMS.map(([field, key]) => [key, field]));
+  for (const [k, v] of params) {
+    const field = fields.get(MODEL_ALIASES[k] ?? k);
+    if (!field) fail(`${id}: unknown diode parameter "${k}"`, line);
+    comp[field] = num(v, `${id} ${k}`, line);
+  }
+  if (area !== 1) {
+    if (!(area > 0)) fail(`${id}: area must be > 0`, line);
+    comp.is = (comp.is ?? 1e-14) * area;
+    if (comp.rs !== undefined) comp.rs /= area;
+    if (comp.cjo !== undefined) comp.cjo *= area;
+    if (comp.bv !== undefined) comp.ibv = (comp.ibv ?? 1e-3) * area;
+  }
+  return comp;
+}
+
+function parseElement(text: string, line: number, models: Models = new Map()): ComponentJSON {
   const tokens = tokenize(text, line);
   const first = tokens.shift();
   if (first?.kind !== "word") fail("expected an element name", line);
@@ -334,6 +444,8 @@ function parseElement(text: string, line: number): ComponentJSON {
       if (roff !== undefined) comp.roff = num(roff, `${id} ROFF`, line);
       return comp;
     }
+    case "D":
+      return parseDiode(id, p, params, models, line);
     case "X": {
       const model = p[p.length - 1]?.toUpperCase();
       if (model !== "OPAMP") {
@@ -361,9 +473,9 @@ function parseElement(text: string, line: number): ComponentJSON {
 }
 
 /** True if the line parses as a valid element (used to detect a SPICE title line). */
-function looksLikeElement({ text, line }: Line): boolean {
+function looksLikeElement({ text, line }: Line, models: Models): boolean {
   try {
-    parseElement(text, line);
+    parseElement(text, line, models);
     return true;
   } catch {
     return false;
@@ -383,8 +495,21 @@ export function parseSpice(source: string, options: SpiceParseOptions = {}): Spi
 
   const titleMode = options.titleLine ?? "auto";
   const firstLine = lines[0];
+
+  // Model cards first: elements may use a model defined further down.
+  const models = new Map<string, ModelCard>();
+  for (const l of lines) {
+    if (l === firstLine && titleMode === true) continue;
+    if (/^\.end\b/i.test(l.text)) break;
+    if (!/^\.model\b/i.test(l.text)) continue;
+    const card = parseModel(l.text, l.line, warnings);
+    const key = card.name.toUpperCase();
+    if (models.has(key)) fail(`duplicate model "${card.name}"`, l.line);
+    models.set(key, card);
+  }
+
   if (firstLine && !firstLine.text.startsWith(".")) {
-    if (titleMode === true || (titleMode === "auto" && !looksLikeElement(firstLine))) {
+    if (titleMode === true || (titleMode === "auto" && !looksLikeElement(firstLine, models))) {
       circuit.title = firstLine.text;
       lines.shift();
     }
@@ -396,6 +521,7 @@ export function parseSpice(source: string, options: SpiceParseOptions = {}): Spi
       const d = (directive as string).toLowerCase();
       if (d === ".end") break;
       if (d === ".title") circuit.title = rest.join(" ");
+      else if (d === ".model") continue;
       else if (d === ".subckt") {
         throw new ElecMapError("UNSUPPORTED", `Line ${line}: .subckt is not supported yet`, {
           line,
@@ -403,7 +529,7 @@ export function parseSpice(source: string, options: SpiceParseOptions = {}): Spi
       } else warnings.push(`Line ${line}: directive ${directive} ignored`);
       continue;
     }
-    circuit.components.push(parseElement(text, line));
+    circuit.components.push(parseElement(text, line, models));
   }
   return { circuit, warnings };
 }
@@ -448,8 +574,34 @@ function sourceToSpice(c: Extract<ComponentJSON, { type: "vsource" | "isource" }
   return parts.join(" ");
 }
 
-/** Serialises one component as a SPICE line. */
-export function componentToSpice(c: ComponentJSON): string {
+/** `KEY=value` list of the diode fields of `c` that differ from `card`. */
+function diodeParamsText(c: DiodeJSON, card: DiodeCard = {}): string[] {
+  return DIODE_PARAMS.filter(([field]) => c[field] !== undefined && c[field] !== card[field]).map(
+    ([field, key]) => `${key}=${formatSpice(c[field] as number)}`,
+  );
+}
+
+/** Model cards of the diodes, by model name (parameters of the first diode using it). */
+function diodeCards(circuit: CircuitJSON): Map<string, DiodeCard> {
+  const cards = new Map<string, DiodeCard>();
+  for (const c of circuit.components) {
+    if (c.type !== "diode" || c.model === undefined || cards.has(c.model)) continue;
+    const card: DiodeCard = {};
+    for (const [field] of DIODE_PARAMS) if (c[field] !== undefined) card[field] = c[field];
+    cards.set(c.model, card);
+  }
+  return cards;
+}
+
+/**
+ * Serialises one component as a SPICE line. A diode refers to its `model` when
+ * `cards` holds it (as written by {@link toSpice}); parameters that differ from
+ * the card are written on the line.
+ */
+export function componentToSpice(
+  c: ComponentJSON,
+  cards: ReadonlyMap<string, DiodeCard> = new Map(),
+): string {
   switch (c.type) {
     case "resistor":
       return `${c.id} ${c.nodes.join(" ")} ${formatSpice(c.value)}`;
@@ -483,13 +635,29 @@ export function componentToSpice(c: ComponentJSON): string {
         ...(c.ron === undefined ? [] : [`RON=${formatSpice(c.ron)}`]),
         ...(c.roff === undefined ? [] : [`ROFF=${formatSpice(c.roff)}`]),
       ].join(" ");
+    case "diode": {
+      const card = c.model === undefined ? undefined : cards.get(c.model);
+      return [
+        c.id,
+        ...c.nodes,
+        ...(card ? [c.model as string] : []),
+        ...diodeParamsText(c, card),
+      ].join(" ");
+    }
   }
 }
 
 /** Serialises a circuit as a SPICE netlist (`.title` first, `.end` last). */
 export function toSpice(circuit: CircuitJSON): string {
   const lines = [circuit.title === undefined ? "* ElecMap circuit" : `.title ${circuit.title}`];
-  for (const c of circuit.components) lines.push(componentToSpice(c));
+  const cards = diodeCards(circuit);
+  for (const c of circuit.components) lines.push(componentToSpice(c, cards));
+  for (const [name, card] of cards) {
+    const list = DIODE_PARAMS.filter(([f]) => card[f] !== undefined).map(
+      ([f, key]) => `${key}=${formatSpice(card[f] as number)}`,
+    );
+    lines.push(`.model ${name} D${list.length ? `(${list.join(" ")})` : ""}`);
+  }
   lines.push(".end");
   return lines.join("\n") + "\n";
 }

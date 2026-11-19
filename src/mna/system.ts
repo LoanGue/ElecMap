@@ -4,7 +4,7 @@ import type { ComponentJSON, NodeName } from "../format/types";
 import { Complex } from "../math/complex";
 import { Polynomial } from "../math/polynomial";
 import { modelOf } from "./models";
-import type { FormContext, LinearForm, StampContext } from "./models";
+import type { FormContext, LinearForm, LoadContext, StampContext } from "./models";
 
 /** Value assigned to each independent source for a given analysis. */
 export type SourceValues = (component: ComponentJSON) => number | Complex;
@@ -18,6 +18,10 @@ export type SourceValues = (component: ComponentJSON) => number | Complex;
  *
  * The same matrices serve every analysis: `s = 0` (DC), `s = jω` (AC), a
  * polynomial matrix in `s` (transfer functions), and companion models (transient).
+ *
+ * Non-linear devices (diodes…) leave their equation rows empty in `G`: DC and
+ * transient analyses fill them at each Newton iteration, and small-signal
+ * analyses use {@link MnaSystem.smallSignal}, linearised around an operating point.
  */
 export class MnaSystem {
   /** Circuit this system was built from. */
@@ -33,9 +37,18 @@ export class MnaSystem {
   /** Human-readable name of each unknown: `V(node)` or `I(component)`. */
   readonly unknowns: readonly string[];
 
+  /** Non-linear components, linearised by Newton-Raphson. */
+  readonly nonlinear: readonly ComponentJSON[];
+  /** Operating point this system is linearised around (small-signal systems only). */
+  readonly bias: readonly number[] | undefined;
+
   private readonly branches: ReadonlyMap<string, number>;
 
-  constructor(circuit: CompiledCircuit) {
+  /**
+   * @param bias operating point (MNA unknowns) around which the non-linear devices
+   *   are linearised; prefer {@link MnaSystem.smallSignal}.
+   */
+  constructor(circuit: CompiledCircuit, bias?: readonly number[]) {
     this.circuit = circuit;
     this.nodeCount = circuit.nodeCount;
     const branches = new Map<string, number>();
@@ -64,8 +77,83 @@ export class MnaSystem {
       component: (id) => circuit.component(id),
     };
     for (const c of circuit.components) modelOf(c).stamp(c, ctx);
+    this.nonlinear = circuit.components.filter((c) => modelOf(c).load !== undefined);
+    this.bias = bias;
+    if (bias) {
+      if (bias.length !== this.size) {
+        throw new ElecMapError(
+          "DIMENSION_MISMATCH",
+          `Bias has ${bias.length} values, expected ${this.size}`,
+        );
+      }
+      this.load(G, new Array<number>(this.size).fill(0), bias, undefined, 1e-12);
+    }
     this.G = G;
     this.C = C;
+  }
+
+  /** True if `G` and `C` fully describe the circuit (no device or already linearised). */
+  get linear(): boolean {
+    return this.nonlinear.length === 0 || this.bias !== undefined;
+  }
+
+  /**
+   * Small-signal system: the non-linear devices replaced by their linearisation
+   * (conductances, transconductances) at the operating point `x`. Returns `this`
+   * for a linear circuit.
+   */
+  smallSignal(x: readonly number[]): MnaSystem {
+    return this.nonlinear.length === 0 ? this : new MnaSystem(this.circuit, x);
+  }
+
+  /**
+   * Adds the Newton linearisation of every non-linear device at `x` to `matrix`
+   * and `rhs` (in place). Returns true if a device limited its voltage step.
+   * `states` (one record per device id) enables step limiting.
+   */
+  load(
+    matrix: number[][],
+    rhs: number[],
+    x: readonly number[],
+    states: Map<string, Record<string, number>> | undefined,
+    gmin: number,
+    initial = false,
+  ): boolean {
+    let limited = false;
+    for (const c of this.nonlinear) {
+      let state: Record<string, number> | undefined;
+      if (states) {
+        state = states.get(c.id);
+        if (!state) states.set(c.id, (state = {}));
+      }
+      const ctx: LoadContext = {
+        node: (n) => this.node(n),
+        branch: (id) => this.branch(id),
+        x,
+        addJ: (row, col, value) => {
+          if (row >= 0 && col >= 0)
+            (matrix[row] as number[])[col] = ((matrix[row] as number[])[col] as number) + value;
+        },
+        addB: (row, value) => {
+          if (row >= 0) rhs[row] = (rhs[row] as number) + value;
+        },
+        state,
+        initial,
+        limited: () => (limited = true),
+        gmin,
+      };
+      modelOf(c).load?.(c, ctx);
+    }
+    return limited;
+  }
+
+  private requireLinear(): void {
+    if (!this.linear) {
+      throw new ElecMapError(
+        "UNSUPPORTED",
+        `Non-linear circuit (${this.nonlinear.map((c) => c.id).join(", ")}): linearise it first with system.smallSignal(operatingPoint.x)`,
+      );
+    }
   }
 
   /** Unknown index of a node, `-1` for ground. */
@@ -94,6 +182,7 @@ export class MnaSystem {
 
   /** Complex matrix `G + s·C`. */
   matrixAt(s: Complex): Complex[][] {
+    this.requireLinear();
     return this.G.map((row, i) =>
       row.map((g, j) => {
         const c = (this.C[i] as readonly number[])[j] as number;
@@ -111,6 +200,7 @@ export class MnaSystem {
 
   /** Polynomial matrix `G + s·C`. */
   polynomialMatrix(): Polynomial[][] {
+    this.requireLinear();
     return this.G.map((row, i) =>
       row.map((g, j) => new Polynomial([g, (this.C[i] as readonly number[])[j] as number])),
     );

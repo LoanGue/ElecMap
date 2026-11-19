@@ -134,6 +134,8 @@ export function valueText(c: ComponentJSON): string {
       return c.closed ? "closed" : "open";
     case "coupling":
       return `k = ${c.k}`;
+    case "diode":
+      return c.model ?? (c.bv === undefined ? "" : `BV ${formatSI(c.bv, "V")}`);
   }
 }
 

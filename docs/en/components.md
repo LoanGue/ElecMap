@@ -47,6 +47,13 @@ The controlling current of `cccs` / `ccvs` is the current through an independent
 - **Op-amp:** ideal (virtual short between the inputs, infinite input impedance, zero output impedance) when `gain` is omitted. With `gain`, the output is `A·(V+ − V−)`; adding `gbw` gives a single-pole model `A / (1 + s·A/(2π·GBW))`. The output is referenced to ground.
 - **Switch:** a fixed-state switch, useful to compare configurations. It is not voltage-controlled.
 
-## Planned (non-linear)
+## Non-linear components
 
-Diodes, Zener diodes, BJTs and MOSFETs (with `.model` cards) will come with the non-linear solver.
+| Type    | SPICE        | `nodes`            | Fields                                                                       |
+| ------- | ------------ | ------------------ | ---------------------------------------------------------------------------- |
+| `diode` | `D… [model]` | `[anode, cathode]` | `model?`, `is?`, `n?`, `rs?`, `bv?`, `ibv?`, `nbv?`, `cjo?` (SPICE defaults) |
+
+- **Diode:** Shockley law with series resistance `rs`; with `bv` it breaks down in reverse (Zener). `cjo` is a constant junction capacitance. Parameters usually come from a `.model NAME D(...)` card. The current is counted from anode to cathode. See the [diodes guide](./diodes.md).
+- Circuits with a diode are solved by Newton-Raphson; small-signal analyses use the circuit linearised at the DC operating point.
+
+BJTs and MOSFETs will follow.

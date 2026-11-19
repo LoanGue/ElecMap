@@ -101,6 +101,11 @@ function twoTerminalBody(c: PlacedComponent, style: "iec" | "ansi"): string {
         path(comp.closed ? "M0 0H26M54 0H80M26 0L54 -3" : "M0 0H26M54 0H80M26 0L51 -14") +
         `<circle class="s" cx="26" cy="0" r="2.5"/><circle class="s" cx="54" cy="0" r="2.5"/>`
       );
+    case "diode": {
+      // Triangle pointing to the cathode bar; a zener bar has bent ends.
+      const bar = comp.bv === undefined ? "M50 -10V10" : "M44 -13L50 -10V10L56 13";
+      return path("M0 0H30M50 0H80" + bar) + `<path class="s f" d="M30 -10L50 0L30 10Z"/>`;
+    }
     default:
       return path("M0 0H80");
   }

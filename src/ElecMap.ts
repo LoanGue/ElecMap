@@ -1,6 +1,7 @@
 import { compile } from "./core/circuit";
 import type { CircuitInput, CompileOptions, CompiledCircuit } from "./core/circuit";
 import { ElecMapError } from "./core/errors";
+import { COMPONENT_CATALOG } from "./format/catalog";
 import type { CircuitJSON, ComponentJSON, NodeName } from "./format/types";
 import type { Complex } from "./math/complex";
 import { MnaSystem } from "./mna/system";
@@ -63,6 +64,7 @@ export class ElecMap {
   protected compiled: CompiledCircuit;
   private readonly options: CompileOptions;
   private systemCache: MnaSystem | undefined;
+  private smallSignalCache: MnaSystem | undefined;
   private dcCache: DcSolution | undefined;
 
   /**
@@ -127,6 +129,28 @@ export class ElecMap {
   /** MNA system, built lazily and cached. */
   get system(): MnaSystem {
     return (this.systemCache ??= new MnaSystem(this.compiled));
+  }
+
+  /**
+   * MNA system linearised around the DC operating point: the one every
+   * small-signal analysis (AC, transfer functions, impedances) uses. For a
+   * linear circuit it is {@link ElecMap.system} itself.
+   *
+   * @example
+   * ```ts
+   * const c = new ElecMap(`
+   * V1 in 0 DC 5 AC 1
+   * R1 in a 1k
+   * D1 a 0 D1N4148
+   * .model D1N4148 D(IS=2.52n N=1.752 RS=0.568)
+   * `);
+   * c.smallSignal.linear; // true: the diode is replaced by its tangent
+   * impedance(c.smallSignal, "a").dcGain(); // 10.874 Ω, same as c.impedance("a")
+   * ```
+   */
+  get smallSignal(): MnaSystem {
+    if (this.system.linear) return this.system;
+    return (this.smallSignalCache ??= this.system.smallSignal(this.operatingPoint().x));
   }
 
   /**
@@ -224,7 +248,7 @@ export class ElecMap {
     if (!comp)
       throw new ElecMapError("NOT_FOUND", `Unknown component "${id}"`, { componentId: id });
     const key = field ?? defaultField(comp);
-    if (!(key in comp) && key !== "dc") {
+    if (!(key in comp) && key !== "dc" && !(key in COMPONENT_CATALOG[comp.type].numbers)) {
       throw new ElecMapError("INVALID_ARGUMENT", `Component "${id}" has no field "${key}"`, {
         componentId: id,
         field: key,
@@ -233,6 +257,7 @@ export class ElecMap {
     (comp as unknown as Record<string, unknown>)[key] = value;
     this.compiled = compile(doc, { ...this.options, ground: this.compiled.ground });
     this.systemCache = undefined;
+    this.smallSignalCache = undefined;
     this.dcCache = undefined;
     return this;
   }
@@ -267,7 +292,7 @@ export class ElecMap {
    * ```
    */
   ac(freq: number, excitation: AcExcitation = {}): AcSolution {
-    return acAnalysis(this.system, freq, excitation);
+    return acAnalysis(this.smallSignal, freq, excitation);
   }
 
   /**
@@ -281,7 +306,7 @@ export class ElecMap {
    * ```
    */
   acSweep(options: AcSweepOptions): AcSweep {
-    return acSweep(this.system, options);
+    return acSweep(this.smallSignal, options);
   }
 
   /**
@@ -403,7 +428,7 @@ export class ElecMap {
       typeof spec === "object" && !Array.isArray(spec) && "output" in spec
         ? (spec as TransferOptions)
         : { output: spec as OutputSpec };
-    return transferFunction(this.system, options);
+    return transferFunction(this.smallSignal, options);
   }
 
   /**
@@ -455,7 +480,7 @@ export class ElecMap {
    * ```
    */
   impedance(a: NodeName, b?: NodeName): TransferFunction {
-    return impedance(this.system, a, b);
+    return impedance(this.smallSignal, a, b);
   }
 
   /**
@@ -520,7 +545,7 @@ export class ElecMap {
    * ```
    */
   inputImpedance(source?: string): TransferFunction {
-    return inputImpedance(this.system, source ?? resolveSingleSource(this.compiled));
+    return inputImpedance(this.smallSignal, source ?? resolveSingleSource(this.compiled));
   }
 
   /**
@@ -554,7 +579,9 @@ export class ElecMap {
     b?: NodeName,
     at: "dc" | { freq: number } = "dc",
   ): DcEquivalent | AcEquivalent {
-    return at === "dc" ? theveninDc(this.system, a, b) : theveninAc(this.system, at.freq, a, b);
+    return at === "dc"
+      ? theveninDc(this.system, a, b, this.smallSignal)
+      : theveninAc(this.smallSignal, at.freq, a, b);
   }
 
   /**
@@ -572,7 +599,9 @@ export class ElecMap {
     b?: NodeName,
     at: "dc" | { freq: number } = "dc",
   ): DcEquivalent | AcEquivalent {
-    return at === "dc" ? theveninDc(this.system, a, b) : theveninAc(this.system, at.freq, a, b);
+    return at === "dc"
+      ? theveninDc(this.system, a, b, this.smallSignal)
+      : theveninAc(this.smallSignal, at.freq, a, b);
   }
 
   // ------------------------------------------------------------------- power
@@ -631,6 +660,8 @@ function defaultField(c: ComponentJSON): string {
       return "gain";
     case "switch":
       return "ron";
+    case "diode":
+      return "is";
     default:
       return "gain";
   }

@@ -350,6 +350,68 @@ export function writeFigures(dir: string, lang: "en" | "fr" = "en"): void {
   R2 a out 1k
   C2 out 0 100n
   `);
+  const diode = new ElecMap(`
+  V1 in 0 5
+  R1 in a 1k
+  D1 a 0 D1N4148
+  .model D1N4148 D(IS=2.52n N=1.752 RS=0.568)
+  `);
+  save("diode.svg", diode.toSVG({ theme: "none", showValues: true, title: "Diode" }));
+  const zener = new ElecMap(`
+  V1 in 0 12
+  R1 in k 470
+  DZ 0 k DZ51
+  RL k 0 1k
+  .model DZ51 D(BV=5.1 IBV=5m)
+  `);
+  save(
+    "zener.svg",
+    zener.toSVG({
+      theme: "none",
+      showValues: true,
+      title: t("Zener regulator", "Régulateur Zener"),
+    }),
+  );
+  const rectifier = new ElecMap(`
+  V1 in 0 SIN(0 10 50)
+  D1 in out DMOD
+  R1 out 0 1k
+  C1 out 0 100u
+  .model DMOD D(IS=1e-14)
+  `);
+  save(
+    "rectifier.svg",
+    rectifier.toSVG({
+      theme: "none",
+      showValues: true,
+      title: t("Half-wave rectifier", "Redresseur simple alternance"),
+    }),
+  );
+  {
+    const tr = rectifier.transient({ tStop: 60e-3, tStep: 50e-6 });
+    const ms = tr.time.map((v) => v * 1e3);
+    save(
+      "rectifier-transient.svg",
+      plot({
+        xLabel: t("Time (ms)", "Temps (ms)"),
+        xFormat: (v) => String(Number(v.toPrecision(3))),
+        panels: [
+          {
+            series: [
+              { x: ms, y: tr.voltage("in"), label: "V(in)" },
+              { x: ms, y: tr.voltage("out"), label: "V(out)" },
+            ],
+            yLabel: t("Voltage (V)", "Tension (V)"),
+          },
+          {
+            series: [{ x: ms, y: tr.current("D1").map((i) => i * 1e3) }],
+            yLabel: "I(D1) (mA)",
+          },
+        ],
+      }),
+    );
+  }
+
   for (const ground of ["rail", "symbols"] as const)
     save(
       `ground-${ground}.svg`,
