@@ -12,6 +12,7 @@ import type { AcSolution, DcSolution } from "./analysis/solution";
 import { transferFunction } from "./analysis/transfer";
 import { transient } from "./analysis/transient";
 import { layoutCircuit } from "./render/layout";
+import type { LayoutOptions } from "./render/layout";
 import type { SchematicLayout } from "./render/layout";
 import { renderSvg } from "./render/svg";
 import { symbolicImpedance, symbolicTransferFunction } from "./symbolic/transfer";
@@ -302,16 +303,18 @@ export class ElecMap {
   /**
    * Schematic geometry (grid units): placed components, routed wires, junctions.
    * Useful to build interactive views; {@link ElecMap.toSVG} renders it.
+   * `options.ground` chooses between a ground rail and ground symbols.
    *
    * @example
    * ```ts
    * const layout = c.layout();
    * layout.components.map((p) => p.id); // ["V1", "R1", "C1"]
-   * layout.bounds; // { minX: -2, minY: -3, maxX: 16, maxY: 9 }
+   * layout.bounds; // { minX: -2, minY: -3, maxX: 16, maxY: 12 }   (the ground rail closes the circuit)
+   * c.layout({ ground: "symbols" }).grounds.length; // 2   (one symbol under V1, one under C1)
    * ```
    */
-  layout(): SchematicLayout {
-    return layoutCircuit(this.compiled);
+  layout(options: LayoutOptions = {}): SchematicLayout {
+    return layoutCircuit(this.compiled, options);
   }
 
   /**
@@ -321,10 +324,14 @@ export class ElecMap {
    * ```ts
    * const svg = c.toSVG(); // '<svg xmlns="http://www.w3.org/2000/svg" class="elecmap" …'
    * c.toSVG({ style: "ansi", highlight: ["R1", "out"], theme: "light" });
+   * c.toSVG({ ground: "symbols" }); // a ground symbol per grounded pin instead of the rail
    * ```
    */
   toSVG(options: SvgOptions = {}): string {
-    const layout = layoutCircuit(this.compiled, { showValues: options.showValues ?? true });
+    const layout = layoutCircuit(this.compiled, {
+      showValues: options.showValues ?? true,
+      ground: options.ground ?? "auto",
+    });
     return renderSvg(layout, { title: this.title ?? "Circuit schematic", ...options });
   }
 

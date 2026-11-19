@@ -43,9 +43,11 @@ function validate(layout: SchematicLayout): string[] {
   const edgeOwner = new Map<string, string>();
   const vertexUse = new Map<string, Map<string, { h: boolean; v: boolean; deg: number }>>();
   const pins = new Map<string, string[]>();
+  const rail = layout.nets.some((n) => n.ground);
   for (const c of layout.components) {
     for (const p of c.pins) {
-      if (!p.ground) pins.set(`${p.x},${p.y}`, [...(pins.get(`${p.x},${p.y}`) ?? []), p.node]);
+      if (rail || !p.ground)
+        pins.set(`${p.x},${p.y}`, [...(pins.get(`${p.x},${p.y}`) ?? []), p.node]);
     }
   }
   for (const net of layout.nets) {
@@ -77,7 +79,7 @@ function validate(layout: SchematicLayout): string[] {
       }
     }
     const netPins = layout.components.flatMap((c) =>
-      c.pins.filter((p) => !p.ground && p.node === net.node),
+      c.pins.filter((p) => (!p.ground || net.ground) && p.node === net.node),
     );
     const roots = new Set(netPins.map((p) => find(`${p.x},${p.y}`)));
     if (roots.size > 1) problems.push(`net ${net.node} is not connected (${roots.size} parts)`);
@@ -117,8 +119,9 @@ describe("schematic layout", () => {
   for (const [name, netlist] of Object.entries(CIRCUITS)) {
     it(`lays out "${name}" consistently`, () => {
       const c = new ElecMap(netlist);
+      for (const ground of ["symbols", "rail", "auto"] as const)
+        expect(validate(c.layout({ ground })), ground).toEqual([]);
       const layout = c.layout();
-      expect(validate(layout)).toEqual([]);
       expect(layout.components.map((p) => p.id).sort()).toEqual(
         c
           .components()
@@ -134,7 +137,7 @@ describe("schematic layout", () => {
   }
 
   it("draws a simple RC like a textbook", () => {
-    const layout = new ElecMap(CIRCUITS.rc as string).layout();
+    const layout = new ElecMap(CIRCUITS.rc as string).layout({ ground: "symbols" });
     const at = (id: string) => layout.components.find((c) => c.id === id);
     expect(at("V1")?.orientation).toBe("down");
     expect(at("C1")?.orientation).toBe("down");
@@ -144,6 +147,37 @@ describe("schematic layout", () => {
       expect(net.segments).toHaveLength(2);
       expect(net.junctions).toHaveLength(0);
     }
+  });
+
+  it("closes the circuit with a ground rail", () => {
+    const layout = new ElecMap(CIRCUITS.rc as string).layout({ ground: "rail" });
+    expect(layout.grounds).toHaveLength(1);
+    const rail = layout.nets.find((n) => n.ground);
+    expect(rail?.node).toBe("0");
+    // Two straight drops joined by the rail, which lies under everything.
+    expect(rail?.segments).toHaveLength(3);
+    expect(rail?.junctions).toHaveLength(0);
+    const bottom = Math.max(...(rail?.segments ?? []).map((s) => Math.max(s.y1, s.y2)));
+    for (const p of layout.components.flatMap((c) => c.pins)) expect(p.y).toBeLessThan(bottom);
+    // A third grounded branch joins it with a junction dot.
+    const divider = new ElecMap(CIRCUITS.divider as string).layout({ ground: "rail" });
+    expect(divider.nets.find((n) => n.ground)?.junctions).toHaveLength(1);
+  });
+
+  it("picks the rail only when it stays clean", () => {
+    const rc = new ElecMap(CIRCUITS.rc as string);
+    expect(rc.layout().nets.some((n) => n.ground)).toBe(true);
+    const picked = Object.fromEntries(
+      Object.entries(CIRCUITS).map(([name, net]) => {
+        const layout = new ElecMap(net).layout();
+        return [name, layout.nets.some((n) => n.ground)];
+      }),
+    );
+    // A single grounded pin: nothing to join.
+    const single = new ElecMap("V1 in 0 1\nR1 in a 1k\nR2 a in 1k").layout();
+    expect(single.grounds).toHaveLength(1);
+    expect(single.nets.some((n) => n.ground)).toBe(false);
+    expect(picked).toMatchSnapshot();
   });
 
   it("stays consistent on random circuits", () => {
@@ -167,9 +201,10 @@ describe("schematic layout", () => {
       if (rand() < 0.4 && n >= 4) lines.push("X1 n1 n2 n3 OPAMP");
       for (const name of names.slice(1)) lines.push(`Rz${name} ${name} 0 1meg`);
       const c = new ElecMap(lines.join("\n"));
-      expect(validate(c.layout()), lines.join("\n")).toEqual([]);
+      for (const ground of ["symbols", "rail"] as const)
+        expect(validate(c.layout({ ground })), `${ground}\n${lines.join("\n")}`).toEqual([]);
     }
-  });
+  }, 30_000);
 });
 
 describe("SVG output", () => {
@@ -200,5 +235,10 @@ describe("SVG output", () => {
     const numeric = new ElecMap("V1 1 0 1\nR1 1 2 1k\nR2 2 0 1k");
     expect(numeric.toSVG()).not.toContain('class="node"');
     expect(numeric.toSVG({ nodeLabels: true })).toContain('class="node"');
+    // The ground rail carries the ground node but no label.
+    const railed = c.toSVG({ ground: "rail", nodeLabels: true });
+    expect(railed).toContain('class="w" data-node="0"');
+    expect(railed).not.toMatch(/class="node"[^>]*data-node="0"/);
+    expect(c.toSVG({ ground: "symbols" })).not.toContain('data-node="0"');
   });
 });

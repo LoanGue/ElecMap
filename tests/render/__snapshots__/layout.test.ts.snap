@@ -1,0 +1,18 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`schematic layout > picks the rail only when it stays clean 1`] = `
+{
+  "controlled": true,
+  "divider": true,
+  "floating": true,
+  "inverting": true,
+  "ladder": true,
+  "noninverting": false,
+  "parallel": true,
+  "rc": true,
+  "sallenKey": true,
+  "transformer": true,
+  "twoIslands": true,
+  "wheatstone": false,
+}
+`;

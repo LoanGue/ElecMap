@@ -12,7 +12,10 @@ export interface PlacedPin {
   node: NodeName;
   x: number;
   y: number;
-  /** True when the node is the ground (drawn with a ground symbol, not routed). */
+  /**
+   * True when the node is the ground: drawn with its own ground symbol, or
+   * wired to the ground rail (see {@link LayoutOptions.ground}).
+   */
   ground: boolean;
 }
 
@@ -40,6 +43,8 @@ export interface PlacedNet {
   junctions: { x: number; y: number }[];
   /** Where the node name is written. */
   labelAt: { x: number; y: number };
+  /** True for the ground rail (only with `ground: "rail"`). */
+  ground?: boolean;
 }
 
 /** Magnetic coupling between two placed inductors. */
@@ -53,7 +58,7 @@ export interface PlacedCoupling {
 export interface SchematicLayout {
   components: PlacedComponent[];
   nets: PlacedNet[];
-  /** Ground symbols, drawn below each point. */
+  /** Ground symbols, drawn below each point (a single one under the rail in rail mode). */
   grounds: { x: number; y: number }[];
   couplings: PlacedCoupling[];
   /** Extent of everything drawn, text included. */
@@ -139,8 +144,10 @@ const key = (x: number, y: number): Key => `${x},${y}`;
 
 /** Grid cells used by a placed element. */
 interface Footprint {
-  /** Hard cells (bodies, ground symbols). */
+  /** Hard cells (bodies). */
   body: Key[];
+  /** Room kept under grounded pins (ground symbol, or the drop to the rail). */
+  reserved: Key[];
   /** Text cells. */
   text: Key[];
   pins: Key[];
@@ -205,7 +212,6 @@ function twoTerminal(
     labelAt = { x: cx + 1.6, y: cy, align: "start" };
   }
   const grounds = pins.filter((p) => p.ground).map((p) => ({ x: p.x, y: p.y }));
-  for (const g of grounds) body.push(...groundCells(g.x, g.y));
   return {
     placed: {
       id: c.id,
@@ -216,7 +222,12 @@ function twoTerminal(
       label: { id: c.id, value },
       labelAt,
     },
-    footprint: { body, text, pins: pins.map((p) => key(p.x, p.y)) },
+    footprint: {
+      body,
+      reserved: grounds.flatMap((g) => groundCells(g.x, g.y)),
+      text,
+      pins: pins.map((p) => key(p.x, p.y)),
+    },
     grounds,
   };
 }
@@ -238,7 +249,6 @@ function opamp(
   const value = showValue ? valueText(c) : "";
   const body = rect(x - 4, y - 2, x - 1, y + 2);
   const grounds = pins.filter((p) => p.ground).map((p) => ({ x: p.x, y: p.y }));
-  for (const g of grounds) body.push(...groundCells(g.x, g.y));
   const w = Math.max(textWidth(c.id), textWidth(value));
   return {
     placed: {
@@ -252,6 +262,7 @@ function opamp(
     },
     footprint: {
       body,
+      reserved: grounds.flatMap((g) => groundCells(g.x, g.y)),
       text: rect(x - 2, y + 2, x - 2 + w, y + 3 + (value ? 1 : 0)),
       pins: pins.map((p) => key(p.x, p.y)),
     },
@@ -263,6 +274,15 @@ function opamp(
 export interface LayoutOptions {
   /** Include component values in the label footprints (default true). */
   showValues?: boolean;
+  /**
+   * How grounded pins are drawn:
+   * - `"symbols"`: a ground symbol under each of them;
+   * - `"rail"`: wired to a common line at the bottom of the schematic, which
+   *   closes the circuit, with a single ground symbol;
+   * - `"auto"` (default): the rail when every grounded pin reaches it by a
+   *   straight drop that touches nothing else, the symbols otherwise.
+   */
+  ground?: "symbols" | "rail" | "auto";
 }
 
 type TwoTerminal = ComponentJSON & { nodes: [NodeName, NodeName] };
@@ -282,11 +302,29 @@ type TwoTerminal = ComponentJSON & { nodes: [NodeName, NodeName] };
  * 3. **Routing**: every net is routed on the grid by A* (bends and crossings
  *    penalised, no shared segments between nets), as a Steiner tree grown from
  *    the node's anchor point.
+ * 4. **Ground**: a symbol under each grounded pin, or a rail under the whole
+ *    schematic that every grounded pin drops to (see {@link LayoutOptions.ground}).
  */
 export function layoutCircuit(
   circuit: CompiledCircuit,
   options: LayoutOptions = {},
 ): SchematicLayout {
+  const mode = options.ground ?? "auto";
+  if (mode === "symbols") return build(circuit, options, "off") as SchematicLayout;
+  if (mode === "rail") return build(circuit, options, "force") as SchematicLayout;
+  return build(circuit, options, "clean") ?? (build(circuit, options, "off") as SchematicLayout);
+}
+
+/**
+ * `rail`: `"off"` draws ground symbols; `"force"` always draws the rail;
+ * `"clean"` draws it only when every drop is straight and free, and returns
+ * `undefined` otherwise.
+ */
+function build(
+  circuit: CompiledCircuit,
+  options: LayoutOptions,
+  rail: "off" | "force" | "clean",
+): SchematicLayout | undefined {
   const showValue = options.showValues ?? true;
   const isGround = (n: NodeName) => circuit.isGround(n);
   const comps = circuit.components;
@@ -464,6 +502,10 @@ export function layoutCircuit(
       occupied.add(k);
       bodyCells.add(k);
     }
+    for (const k of cand.footprint.reserved) {
+      occupied.add(k);
+      if (rail === "off") bodyCells.add(k);
+    }
     for (const k of cand.footprint.text) {
       occupied.add(k);
       textCells.add(k);
@@ -612,6 +654,53 @@ export function layoutCircuit(
     for (const pin of p.pins) if (!pin.ground) pinsByNet.get(pin.node)?.push(pin);
   for (const [net, pins] of pinsByNet) for (const p of pins) router.pin(net, p.x, p.y);
 
+  // Ground rail, routed before the other nets so that they go around the drops.
+  const groundPins = placed.flatMap((p) => p.pins.filter((pin) => pin.ground));
+  const useRail = rail !== "off" && groundPins.length > 0;
+  if (rail === "clean" && groundPins.length < 2) return undefined;
+  const gnd = circuit.ground;
+  if (useRail) {
+    const railY = maxY + 1;
+    const xs = groundPins.map((p) => p.x);
+    const x0 = Math.min(...xs);
+    const x1 = Math.max(...xs);
+    for (const p of groundPins) router.pin(gnd, p.x, p.y);
+    const railPath: number[] = [];
+    for (let rx = x0; rx <= x1; rx++) railPath.push(router.index(rx, railY));
+    router.commit(gnd, railPath);
+    const railSet = new Set(railPath);
+    const tree = new Set(railPath);
+    // A straight drop that touches no body, pin, label or other wire.
+    const straight = (p: PlacedPin) => {
+      for (let y = p.y + 1; y < railY; y++) {
+        const k = key(p.x, y);
+        if (bodyCells.has(k) || pinCells.has(k) || textCells.has(k)) return false;
+        if (!router.isFree(gnd, p.x, y)) return false;
+      }
+      return true;
+    };
+    // Lowest pins first: their drops are the shortest.
+    for (const p of [...groundPins].sort((a, b) => b.y - a.y || a.x - b.x)) {
+      if (straight(p)) {
+        const path: number[] = [];
+        for (let y = p.y; y <= railY; y++) path.push(router.index(p.x, y));
+        router.commit(gnd, path);
+        for (const v of path) tree.add(v);
+      } else if (rail === "clean") {
+        return undefined;
+      } else {
+        const path = router.route(gnd, [p.x, p.y], tree.size ? tree : railSet);
+        router.commit(gnd, path);
+        for (const v of path) tree.add(v);
+      }
+    }
+    let sx = Math.round((x0 + x1) / 2);
+    if (x1 > x0 && xs.includes(sx)) sx = xs.includes(sx + 1) ? sx - 1 : sx + 1;
+    grounds.length = 0;
+    grounds.push({ x: sx, y: railY });
+    maxY = Math.max(maxY, railY + 2);
+  }
+
   const span = (pins: PlacedPin[]) =>
     pins.length === 0
       ? 0
@@ -668,9 +757,10 @@ export function layoutCircuit(
   const pinKeys = new Map<Key, number>();
   for (const p of placed)
     for (const pin of p.pins)
-      if (!pin.ground) pinKeys.set(key(pin.x, pin.y), (pinKeys.get(key(pin.x, pin.y)) ?? 0) + 1);
+      if (useRail || !pin.ground)
+        pinKeys.set(key(pin.x, pin.y), (pinKeys.get(key(pin.x, pin.y)) ?? 0) + 1);
   const nets: PlacedNet[] = [];
-  for (const net of nodes) {
+  for (const net of useRail ? [...nodes, gnd] : nodes) {
     const edges = router.netEdges.get(net) ?? [];
     const degree = new Map<number, number>();
     const unique = new Map<string, [number, number]>();
@@ -704,7 +794,7 @@ export function layoutCircuit(
       const [px, py] = router.point(v);
       if (d + (pinKeys.get(key(px, py)) ?? 0) >= 3) junctions.push({ x: px, y: py });
     }
-    const seed = seeds.get(net) ?? anchor(net);
+    const seed = seeds.get(net) ?? (net === gnd ? (grounds[0] ?? anchor(net)) : anchor(net));
     nets.push({
       node: net,
       segments: mergeSegments(
@@ -712,6 +802,7 @@ export function layoutCircuit(
       ),
       junctions,
       labelAt: { x: seed.x, y: seed.y },
+      ...(net === gnd ? { ground: true } : {}),
     });
     for (const v of degree.keys()) {
       const [px, py] = router.point(v);

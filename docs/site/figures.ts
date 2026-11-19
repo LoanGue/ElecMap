@@ -342,4 +342,17 @@ export function writeFigures(dir: string, lang: "en" | "fr" = "en"): void {
       title: "Highlighting",
     }),
   );
+
+  const ladder = new ElecMap(`
+  V1 in 0 AC 1
+  R1 in a 1k
+  C1 a 0 100n
+  R2 a out 1k
+  C2 out 0 100n
+  `);
+  for (const ground of ["rail", "symbols"] as const)
+    save(
+      `ground-${ground}.svg`,
+      ladder.toSVG({ theme: "none", ground, title: t("RC ladder", "Échelle RC") }),
+    );
 }
