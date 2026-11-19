@@ -38,7 +38,7 @@ Lorsque le système continu est singulier parce qu'un nœud n'a pas de chemin co
 
 ## Circuits non linéaires
 
-Un composant non linéaire ajoute une étape `load` à son stamp MNA. Une diode a son propre courant de branche `I` comme inconnue : son incidence dans les lois des nœuds est dans G (et `CJO` dans C), et sa ligne de branche est remplie à chaque itération de Newton par la tangente de la loi de Shockley à l'itéré courant `V_j⁰` :
+Un composant non linéaire ajoute une étape `load` à son stamp MNA. Une diode a son propre courant de branche `I` comme inconnue : son incidence dans les lois des nœuds est dans G, et sa ligne de branche est remplie à chaque itération de Newton par la tangente de la loi de Shockley à l'itéré courant `V_j⁰` :
 
 <div class="em-math">(1 + g\,R_S)\,I - g\,V_A + g\,V_K = I_d(V_j^0) - g\,V_j^0, \qquad g = \frac{\partial I_d}{\partial V_j}(V_j^0)</div>
 
@@ -49,8 +49,9 @@ Les transistors suivent le même schéma avec plus d'inconnues : un BJT a deux c
 - **Newton-Raphson.** Chaque itération reconstruit `G + J` et le résout par LU. Un itéré est accepté quand chaque tension bouge de moins de `reltol·|v| + vntol` et chaque courant de moins de `reltol·|i| + abstol`, après au moins deux itérations et sans limitation ; un dernier pas est alors fait depuis le point accepté, ce qui, Newton étant quadratique, rend le résultat précis bien au-delà des tolérances.
 - **Limitation.** Comme dans SPICE (`pnjlim`), un pas de tension de jonction au-delà de la tension critique `V_crit = N·V_T·ln(N·V_T / (√2·I_S))` est remplacé par un pas logarithmique ; la branche de claquage est limitée de la même façon. À la première itération, chaque jonction part de `V_crit`. Les BJT limitent leurs deux jonctions ainsi ; les MOSFET limitent `V_GS` et `V_DS` avec `fetlim` / `limvds` de SPICE, en partant de `V_GS = VTO`. Une conductance `gmin = 1e-12 S` est placée aux bornes de chaque jonction, et les exponentielles sont prolongées linéairement au-delà de `e^80` pour éviter les dépassements.
 - **Homotopies en continu.** Si Newton seul échoue : **gmin stepping** (une conductance de chaque nœud vers la masse, de 10 mS jusqu'à 0, chaque résolution partant de la précédente), puis **source stepping** (toutes les sources indépendantes multipliées par un facteur allant de 0 à 1 avec un pas adaptatif). Sinon `NO_CONVERGENCE` est levée.
-- **Transitoire.** Chaque pas de temps est une résolution de Newton sur le système compagnon `(α·C + G)`, en partant du point précédent ; l'état des composants (dernières tensions de jonction) est conservé d'un pas à l'autre.
-- **Petits signaux.** `system.smallSignal(x)` construit un nouveau `MnaSystem` linéaire dont G contient la jacobienne en `x` (le point de fonctionnement). Toutes les analyses fréquentielles s'y appliquent sans changement. Le moteur littéral (symbolique) refuse les circuits non linéaires.
+- **Charges de jonction.** Chaque jonction stocke une charge `Q(v)` (déplétion plus diffusion `TT·I`), dont le courant `dQ/dt` s'ajoute aux lignes de branche du composant : les inconnues de branche restent les courants totaux des bornes. Les charges ne sont pas dans `C`, qui est constante : l'analyse transitoire intègre `q(x) = C·x + Q(x)` avec la même formule que les charges linéaires, et Newton linéarise `α·Q(x)` comme les courants.
+- **Transitoire.** Chaque pas de temps est une résolution de Newton sur le système compagnon `(α·C + G)` plus `α·Q(x)`, en partant du point précédent ; l'état des composants (dernières tensions de jonction) est conservé d'un pas à l'autre.
+- **Petits signaux.** `system.smallSignal(x)` construit un nouveau `MnaSystem` linéaire dont G contient la jacobienne en `x` (le point de fonctionnement) et C les capacités de jonction `dQ/dv` en `x`. Toutes les analyses fréquentielles s'y appliquent sans changement. Le moteur littéral (symbolique) refuse les circuits non linéaires.
 
 ## Fonctions de transfert
 

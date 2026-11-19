@@ -38,7 +38,7 @@ When the DC system is singular because a node has no DC path (behind series capa
 
 ## Non-linear circuits
 
-A non-linear device adds a `load` step to its MNA stamp. A diode has its own branch current `I` as an unknown: its KCL incidence sits in G (and `CJO` in C), and its branch row is filled at each Newton iteration with the tangent of the Shockley law at the current iterate `V_j⁰`:
+A non-linear device adds a `load` step to its MNA stamp. A diode has its own branch current `I` as an unknown: its KCL incidence sits in G, and its branch row is filled at each Newton iteration with the tangent of the Shockley law at the current iterate `V_j⁰`:
 
 <div class="em-math">(1 + g\,R_S)\,I - g\,V_A + g\,V_K = I_d(V_j^0) - g\,V_j^0, \qquad g = \frac{\partial I_d}{\partial V_j}(V_j^0)</div>
 
@@ -49,8 +49,9 @@ Transistors follow the same pattern with more unknowns: a BJT has two branch cur
 - **Newton-Raphson.** Each iteration rebuilds `G + J` and solves it by LU. An iterate is accepted when every voltage moves by less than `reltol·|v| + vntol` and every current by less than `reltol·|i| + abstol`, after at least two iterations and with no device limited; one last step is then taken from the accepted point, which, Newton being quadratic, makes the result accurate far below the tolerances.
 - **Limiting.** As in SPICE (`pnjlim`), a junction voltage step above the critical voltage `V_crit = N·V_T·ln(N·V_T / (√2·I_S))` is replaced by a logarithmic one; the breakdown branch is limited the same way. On the first iteration every junction starts at `V_crit`. BJTs limit both junctions this way; MOSFETs limit `V_GS` and `V_DS` with SPICE's `fetlim` / `limvds`, starting at `V_GS = VTO`. `gmin = 1e-12 S` sits across each junction, and exponentials are continued linearly beyond `e^80` to avoid overflow.
 - **DC homotopies.** If plain Newton fails: **gmin stepping** (a conductance from every node to ground, from 10 mS down to 0, each solve starting from the previous one), then **source stepping** (all independent sources scaled from 0 to 1 with an adaptive step). Otherwise `NO_CONVERGENCE` is thrown.
-- **Transient.** Each time step is a Newton solve on the companion system `(α·C + G)`, starting from the previous point; device states (last junction voltages) are carried from step to step.
-- **Small signal.** `system.smallSignal(x)` builds a new linear `MnaSystem` whose G includes the Jacobian at `x` (the operating point). Every frequency-domain analysis runs on it unchanged. The literal (symbolic) engine refuses non-linear circuits.
+- **Junction charges.** Each junction stores a charge `Q(v)` (depletion plus diffusion `TT·I`), whose current `dQ/dt` is added to the device's own branch rows: the branch unknowns stay the total terminal currents. The charges are not in `C`, which is constant: transient analysis integrates `q(x) = C·x + Q(x)` with the same formula as the linear charges, and Newton linearises `α·Q(x)` like the device currents.
+- **Transient.** Each time step is a Newton solve on the companion system `(α·C + G)` plus `α·Q(x)`, starting from the previous point; device states (last junction voltages) are carried from step to step.
+- **Small signal.** `system.smallSignal(x)` builds a new linear `MnaSystem` whose G includes the Jacobian at `x` (the operating point) and whose C includes the junction capacitances `dQ/dv` at `x`. Every frequency-domain analysis runs on it unchanged. The literal (symbolic) engine refuses non-linear circuits.
 
 ## Transfer functions
 

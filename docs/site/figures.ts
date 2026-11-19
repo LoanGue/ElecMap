@@ -620,4 +620,66 @@ export function writeFigures(dir: string, lang: "en" | "fr" = "en"): void {
       }),
     );
   }
+
+  // Junction capacitance: a varactor-tuned RC filter and the reverse recovery of a diode.
+  {
+    const vco = new ElecMap(`
+  V1 in 0 DC 0 AC 1
+  R1 in a 10k
+  D1 0 a DVAR
+  .model DVAR D(CJO=30p VJ=0.7 M=0.5)
+  `);
+    const vr = Array.from({ length: 41 }, (_, i) => i * 0.25);
+    const fc = vr.map(
+      (v) => vco.setValue("V1", v, "dc").transferFunction("a").cutoffFrequency() as number,
+    );
+    save(
+      "varactor.svg",
+      plot({
+        xLabel: t("Reverse voltage (V)", "Tension inverse (V)"),
+        xFormat: (v) => String(Number(v.toPrecision(3))),
+        panels: [
+          {
+            series: [{ x: vr, y: fc.map((f) => 1 / (2 * Math.PI * 1e4 * f) / 1e-12) }],
+            yLabel: t("Capacitance (pF)", "Capacité (pF)"),
+          },
+          { series: [{ x: vr, y: fc }], yLabel: "fc (Hz)" },
+        ],
+      }),
+    );
+
+    const recovery = (tt: string) =>
+      new ElecMap(`
+  V1 in 0 PULSE(5 -5 100n 1n 1n 1u 2u)
+  R1 in a 1k
+  D1 a 0 DS
+  .model DS D(IS=1e-14 TT=${tt})
+  `).transient({ tStop: 250e-9, tStep: 0.5e-9 });
+    const fast = recovery("0");
+    const slow = recovery("50n");
+    const ns = fast.time.map((x) => x * 1e9);
+    save(
+      "reverse-recovery.svg",
+      plot({
+        xLabel: t("Time (ns)", "Temps (ns)"),
+        xFormat: (v) => String(Math.round(v)),
+        panels: [
+          {
+            series: [
+              { x: ns, y: fast.current("D1").map((i) => i * 1e3), label: "TT = 0" },
+              { x: ns, y: slow.current("D1").map((i) => i * 1e3), label: "TT = 50 ns" },
+            ],
+            yLabel: "I(D1) (mA)",
+          },
+          {
+            series: [
+              { x: ns, y: fast.voltage("a"), label: "TT = 0" },
+              { x: ns, y: slow.voltage("a"), label: "TT = 50 ns" },
+            ],
+            yLabel: "V(a) (V)",
+          },
+        ],
+      }),
+    );
+  }
 }

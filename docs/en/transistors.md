@@ -76,15 +76,15 @@ Q1 c b e Q2N2222
 `);
 
 const H = amp.transferFunction({ input: "VS", output: "c" });
-H.evaluate(10e3).abs(); // 224.42       47.0 dB, close to gm·(RC ∥ ro)
-H.evaluate(10e3).arg() * (180 / Math.PI); // -179.07°    inverting
-amp.inputImpedance("VS").evaluate(10e3).abs(); // 1846.4 Ω  RB1 ∥ RB2 ∥ rπ
-amp.outputImpedance("c").evaluate(10e3).abs(); // 2035.3 Ω  RC ∥ ro
+H.evaluate(10e3).abs(); // 224.43       47.0 dB, close to gm·(RC ∥ ro)
+H.evaluate(10e3).arg() * (180 / Math.PI); // -179.05°    inverting
+amp.inputImpedance("VS").evaluate(10e3).abs(); // 1869.7 Ω  RB1 ∥ RB2 ∥ rπ
+amp.outputImpedance("c").evaluate(10e3).abs(); // 2035.5 Ω  RC ∥ ro
 ```
 
 <figure class="em-figure">
 {@include ./figures/ce-bode.svg}
-<figcaption>The band runs from about 170 Hz (coupling and bypass capacitors) to about 10 MHz (CJC, multiplied by the gain: the Miller effect)</figcaption>
+<figcaption>The band runs from about 170 Hz (coupling and bypass capacitors) to about 19 MHz (CJC at the reverse-biased collector junction, multiplied by the gain: the Miller effect)</figcaption>
 </figure>
 
 A transient shows what the small-signal model cannot: with a 2 mV input the output swings 0.9 V peak to peak around its bias, and a larger input distorts.
@@ -123,23 +123,32 @@ p.current("Q1:e"); // 0.0026871 A  emitter current enters it
 
 ### BJT parameters
 
-| SPICE | JSON  | Meaning                                       | Default |
-| ----- | ----- | --------------------------------------------- | ------- |
-| `IS`  | `is`  | transport saturation current (A)              | `1e-16` |
-| `BF`  | `bf`  | forward current gain β                        | `100`   |
-| `BR`  | `br`  | reverse current gain                          | `1`     |
-| `NF`  | `nf`  | forward emission coefficient                  | `1`     |
-| `NR`  | `nr`  | reverse emission coefficient                  | `1`     |
-| `VAF` | `vaf` | forward Early voltage (V), `VA` accepted      | ∞       |
-| `VAR` | `var` | reverse Early voltage (V), `VB` accepted      | ∞       |
-| `CJE` | `cje` | base-emitter capacitance (F), held constant   | `0`     |
-| `CJC` | `cjc` | base-collector capacitance (F), held constant | `0`     |
+| SPICE | JSON  | Meaning                                  | Default |
+| ----- | ----- | ---------------------------------------- | ------- |
+| `IS`  | `is`  | transport saturation current (A)         | `1e-16` |
+| `BF`  | `bf`  | forward current gain β                   | `100`   |
+| `BR`  | `br`  | reverse current gain                     | `1`     |
+| `NF`  | `nf`  | forward emission coefficient             | `1`     |
+| `NR`  | `nr`  | reverse emission coefficient             | `1`     |
+| `VAF` | `vaf` | forward Early voltage (V), `VA` accepted | ∞       |
+| `VAR` | `var` | reverse Early voltage (V), `VB` accepted | ∞       |
+| `CJE` | `cje` | zero-bias base-emitter capacitance (F)   | `0`     |
+| `VJE` | `vje` | base-emitter junction potential (V)      | `0.75`  |
+| `MJE` | `mje` | base-emitter grading coefficient         | `0.33`  |
+| `CJC` | `cjc` | zero-bias base-collector capacitance (F) | `0`     |
+| `VJC` | `vjc` | base-collector junction potential (V)    | `0.75`  |
+| `MJC` | `mjc` | base-collector grading coefficient       | `0.33`  |
+| `TF`  | `tf`  | forward transit time (s)                 | `0`     |
+| `TR`  | `tr`  | reverse transit time (s)                 | `0`     |
+| `FC`  | `fc`  | forward-bias capacitance coefficient     | `0.5`   |
 
 The currents are those of the SPICE Gummel-Poon model without high-injection and series resistances:
 
 <div class="em-math">I_C = \left(I_{BE} - I_{BC}\right)\left(1 - \frac{V_{BC}}{V_{AF}} - \frac{V_{BE}}{V_{AR}}\right) - \frac{I_{BC}}{B_R}, \qquad I_B = \frac{I_{BE}}{B_F} + \frac{I_{BC}}{B_R}, \qquad I_{BE} = I_S\left(e^{V_{BE}/N_F V_T} - 1\right)</div>
 
-An optional substrate node (`Q1 c b e sub QMOD`) is ignored with a warning; an area factor after the model name multiplies `IS`, `CJE` and `CJC`.
+An optional substrate node (`Q1 c b e sub QMOD`) is ignored with a warning; an area factor after the model name multiplies `IS`, `CJE` and `CJC`. `PE`, `ME`, `PC` and `MC` are accepted for `VJE`, `MJE`, `VJC` and `MJC`.
+
+Each junction stores a depletion charge that depends on its voltage, as for a [diode](./diodes.md#junction-capacitance-and-transit-time), plus the diffusion charges `TF·I_BE` (base-emitter) and `TR·I_BC` (base-collector). In small signal, `TF` adds `TF·gm` to the base-emitter capacitance and sets the transition frequency `f_T ≈ 1 / (2π·TF)` at high current.
 
 ## A MOSFET common-source stage
 
@@ -274,7 +283,7 @@ The JSON fields are listed in the [components reference](./components.md); a BJT
 
 ## Limitations
 
-- Capacitances (`CJE`, `CJC`, `CGSO`, `CGDO`) are constant; transit times, base and emitter resistances, high-injection effects and the MOSFET Meyer capacitances are not modelled.
+- The MOSFET capacitances `CGSO` and `CGDO` are constant; base and emitter resistances, high-injection effects and the MOSFET Meyer capacitances are not modelled.
 - MOSFETs follow level 1 only: no subthreshold conduction, no velocity saturation.
 - Literal transfer functions are not available for transistor circuits:
 

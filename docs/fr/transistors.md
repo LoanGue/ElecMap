@@ -76,15 +76,15 @@ Q1 c b e Q2N2222
 `);
 
 const H = amp.transferFunction({ input: "VS", output: "c" });
-H.evaluate(10e3).abs(); // 224.42       47,0 dB, proche de gm·(RC ∥ ro)
-H.evaluate(10e3).arg() * (180 / Math.PI); // -179.07°    inverseur
-amp.inputImpedance("VS").evaluate(10e3).abs(); // 1846.4 Ω  RB1 ∥ RB2 ∥ rπ
-amp.outputImpedance("c").evaluate(10e3).abs(); // 2035.3 Ω  RC ∥ ro
+H.evaluate(10e3).abs(); // 224.43       47,0 dB, proche de gm·(RC ∥ ro)
+H.evaluate(10e3).arg() * (180 / Math.PI); // -179.05°    inverseur
+amp.inputImpedance("VS").evaluate(10e3).abs(); // 1869.7 Ω  RB1 ∥ RB2 ∥ rπ
+amp.outputImpedance("c").evaluate(10e3).abs(); // 2035.5 Ω  RC ∥ ro
 ```
 
 <figure class="em-figure">
 {@include ./figures/ce-bode.svg}
-<figcaption>La bande va d'environ 170 Hz (condensateurs de liaison et de découplage) à environ 10 MHz (CJC, multipliée par le gain : l'effet Miller)</figcaption>
+<figcaption>La bande va d'environ 170 Hz (condensateurs de liaison et de découplage) à environ 19 MHz (CJC de la jonction collecteur polarisée en inverse, multipliée par le gain : l'effet Miller)</figcaption>
 </figure>
 
 Un transitoire montre ce que le modèle petits signaux ne peut pas voir : avec 2 mV en entrée, la sortie varie de 0,9 V crête à crête autour de son point de repos, et une entrée plus forte est déformée.
@@ -123,23 +123,32 @@ p.current("Q1:e"); // 0.0026871 A  le courant d'émetteur y entre
 
 ### Paramètres du BJT
 
-| SPICE | JSON  | Signification                             | Défaut  |
-| ----- | ----- | ----------------------------------------- | ------- |
-| `IS`  | `is`  | courant de saturation de transport (A)    | `1e-16` |
-| `BF`  | `bf`  | gain en courant direct β                  | `100`   |
-| `BR`  | `br`  | gain en courant inverse                   | `1`     |
-| `NF`  | `nf`  | coefficient d'émission direct             | `1`     |
-| `NR`  | `nr`  | coefficient d'émission inverse            | `1`     |
-| `VAF` | `vaf` | tension d'Early directe (V), `VA` accepté | ∞       |
-| `VAR` | `var` | tension d'Early inverse (V), `VB` accepté | ∞       |
-| `CJE` | `cje` | capacité base-émetteur (F), constante     | `0`     |
-| `CJC` | `cjc` | capacité base-collecteur (F), constante   | `0`     |
+| SPICE | JSON  | Signification                                     | Défaut  |
+| ----- | ----- | ------------------------------------------------- | ------- |
+| `IS`  | `is`  | courant de saturation de transport (A)            | `1e-16` |
+| `BF`  | `bf`  | gain en courant direct β                          | `100`   |
+| `BR`  | `br`  | gain en courant inverse                           | `1`     |
+| `NF`  | `nf`  | coefficient d'émission direct                     | `1`     |
+| `NR`  | `nr`  | coefficient d'émission inverse                    | `1`     |
+| `VAF` | `vaf` | tension d'Early directe (V), `VA` accepté         | ∞       |
+| `VAR` | `var` | tension d'Early inverse (V), `VB` accepté         | ∞       |
+| `CJE` | `cje` | capacité base-émetteur à polarisation nulle (F)   | `0`     |
+| `VJE` | `vje` | potentiel de la jonction base-émetteur (V)        | `0.75`  |
+| `MJE` | `mje` | coefficient de gradualité base-émetteur           | `0.33`  |
+| `CJC` | `cjc` | capacité base-collecteur à polarisation nulle (F) | `0`     |
+| `VJC` | `vjc` | potentiel de la jonction base-collecteur (V)      | `0.75`  |
+| `MJC` | `mjc` | coefficient de gradualité base-collecteur         | `0.33`  |
+| `TF`  | `tf`  | temps de transit direct (s)                       | `0`     |
+| `TR`  | `tr`  | temps de transit inverse (s)                      | `0`     |
+| `FC`  | `fc`  | coefficient de capacité en direct                 | `0.5`   |
 
 Les courants sont ceux du modèle Gummel-Poon de SPICE sans forte injection ni résistances série :
 
 <div class="em-math">I_C = \left(I_{BE} - I_{BC}\right)\left(1 - \frac{V_{BC}}{V_{AF}} - \frac{V_{BE}}{V_{AR}}\right) - \frac{I_{BC}}{B_R}, \qquad I_B = \frac{I_{BE}}{B_F} + \frac{I_{BC}}{B_R}, \qquad I_{BE} = I_S\left(e^{V_{BE}/N_F V_T} - 1\right)</div>
 
-Un nœud de substrat optionnel (`Q1 c b e sub QMOD`) est ignoré avec un avertissement ; un facteur de surface après le nom du modèle multiplie `IS`, `CJE` et `CJC`.
+Un nœud de substrat optionnel (`Q1 c b e sub QMOD`) est ignoré avec un avertissement ; un facteur de surface après le nom du modèle multiplie `IS`, `CJE` et `CJC`. `PE`, `ME`, `PC` et `MC` sont acceptés pour `VJE`, `MJE`, `VJC` et `MJC`.
+
+Chaque jonction stocke une charge de déplétion qui dépend de sa tension, comme pour une [diode](./diodes.md#capacité-de-jonction-et-temps-de-transit), plus les charges de diffusion `TF·I_BE` (base-émetteur) et `TR·I_BC` (base-collecteur). En petits signaux, `TF` ajoute `TF·gm` à la capacité base-émetteur et fixe la fréquence de transition `f_T ≈ 1 / (2π·TF)` à fort courant.
 
 ## Un étage MOSFET source commune
 
@@ -274,7 +283,7 @@ Les champs JSON sont listés dans la [référence des composants](./components.m
 
 ## Limites
 
-- Les capacités (`CJE`, `CJC`, `CGSO`, `CGDO`) sont constantes ; les temps de transit, les résistances de base et d'émetteur, les effets de forte injection et les capacités de Meyer du MOSFET ne sont pas modélisés.
+- Les capacités `CGSO` et `CGDO` du MOSFET sont constantes ; les résistances de base et d'émetteur, les effets de forte injection et les capacités de Meyer du MOSFET ne sont pas modélisés.
 - Les MOSFET suivent uniquement le niveau 1 : pas de conduction sous le seuil, pas de saturation de vitesse.
 - Les fonctions de transfert littérales ne sont pas disponibles pour les circuits à transistors :
 

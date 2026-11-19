@@ -64,6 +64,7 @@ function checkNumber(value: unknown, constraint: NumberConstraint): string | und
   if (constraint === "positive" && !(value > 0)) return "must be > 0";
   if (constraint === "nonNegative" && !(value >= 0)) return "must be ≥ 0";
   if (constraint === "coupling" && !(value > 0 && value <= 1)) return "must be in (0, 1]";
+  if (constraint === "fraction" && !(value >= 0 && value < 1)) return "must be in [0, 1)";
   return undefined;
 }
 

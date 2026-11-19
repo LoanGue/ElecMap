@@ -5,6 +5,7 @@ export type {
   ComponentModel,
   ModelMap,
   FormContext,
+  Junction,
   LinearForm,
   LinearTerm,
   LoadContext,
@@ -12,3 +13,4 @@ export type {
   StampContext,
   Terminal,
 } from "./models";
+export type { Charge } from "./devices";

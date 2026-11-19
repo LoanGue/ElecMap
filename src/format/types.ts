@@ -228,8 +228,16 @@ export interface DiodeJSON extends ComponentBase {
   ibv?: number;
   /** Emission coefficient of the breakdown (default `n`). */
   nbv?: number;
-  /** Junction capacitance (F, default 0), taken as constant. */
+  /** Zero-bias junction capacitance (F, default 0). */
   cjo?: number;
+  /** Junction potential (V, default 1). */
+  vj?: number;
+  /** Grading coefficient (default 0.5): `C(v) = cjo / (1 − v/vj)^m`. */
+  m?: number;
+  /** Transit time (s, default 0): adds the diffusion charge `tt·I`. */
+  tt?: number;
+  /** Forward-bias coefficient (default 0.5): `C(v)` is continued linearly above `fc·vj`. */
+  fc?: number;
 }
 
 /**
@@ -262,10 +270,24 @@ export interface BjtJSON extends ComponentBase {
   vaf?: number;
   /** Reverse Early voltage (V, default ∞). */
   var?: number;
-  /** Base-emitter junction capacitance (F, default 0), taken as constant. */
+  /** Zero-bias base-emitter capacitance (F, default 0). */
   cje?: number;
-  /** Base-collector junction capacitance (F, default 0), taken as constant. */
+  /** Base-emitter junction potential (V, default 0.75). */
+  vje?: number;
+  /** Base-emitter grading coefficient (default 0.33). */
+  mje?: number;
+  /** Zero-bias base-collector capacitance (F, default 0). */
   cjc?: number;
+  /** Base-collector junction potential (V, default 0.75). */
+  vjc?: number;
+  /** Base-collector grading coefficient (default 0.33). */
+  mjc?: number;
+  /** Forward transit time (s, default 0): diffusion charge `tf·Ibe`. */
+  tf?: number;
+  /** Reverse transit time (s, default 0): diffusion charge `tr·Ibc`. */
+  tr?: number;
+  /** Forward-bias coefficient of both depletion capacitances (default 0.5). */
+  fc?: number;
 }
 
 /**

@@ -49,13 +49,13 @@ Le courant de commande de `cccs` / `ccvs` est le courant qui traverse une source
 
 ## Composants non linéaires
 
-| Type     | SPICE        | `nodes`            | Champs                                                                      |
-| -------- | ------------ | ------------------ | --------------------------------------------------------------------------- |
-| `diode`  | `D… [model]` | `[anode, cathode]` | `model?`, `is?`, `n?`, `rs?`, `bv?`, `ibv?`, `nbv?`, `cjo?` (défauts SPICE) |
-| `bjt`    | `Q… [model]` | `[c, b, e]`        | `polarity` (`"npn"`                                                         | `"pnp"`), `model?`, `is?`, `bf?`, `br?`, `nf?`, `nr?`, `vaf?`, `var?`, `cje?`, `cjc?`         |
-| `mosfet` | `M… model`   | `[d, g, s, b]`     | `polarity` (`"nmos"`                                                        | `"pmos"`), `model?`, `vto?`, `kp?`, `lambda?`, `gamma?`, `phi?`, `cgso?`, `cgdo?`, `w?`, `l?` |
+| Type     | SPICE        | `nodes`            | Champs                                                                                                 |
+| -------- | ------------ | ------------------ | ------------------------------------------------------------------------------------------------------ |
+| `diode`  | `D… [model]` | `[anode, cathode]` | `model?`, `is?`, `n?`, `rs?`, `bv?`, `ibv?`, `nbv?`, `cjo?`, `vj?`, `m?`, `tt?`, `fc?` (défauts SPICE) |
+| `bjt`    | `Q… [model]` | `[c, b, e]`        | `polarity` (`"npn"`                                                                                    | `"pnp"`), `model?`, `is?`, `bf?`, `br?`, `nf?`, `nr?`, `vaf?`, `var?`, `cje?`, `vje?`, `mje?`, `cjc?`, `vjc?`, `mjc?`, `tf?`, `tr?`, `fc?` |
+| `mosfet` | `M… model`   | `[d, g, s, b]`     | `polarity` (`"nmos"`                                                                                   | `"pmos"`), `model?`, `vto?`, `kp?`, `lambda?`, `gamma?`, `phi?`, `cgso?`, `cgdo?`, `w?`, `l?`                                              |
 
-- **Diode :** loi de Shockley avec résistance série `rs` ; avec `bv`, elle claque en inverse (Zener). `cjo` est une capacité de jonction constante. Les paramètres viennent en général d'une carte `.model NOM D(...)`. Le courant est compté de l'anode vers la cathode. Voir le [guide des diodes](./diodes.md).
+- **Diode :** loi de Shockley avec résistance série `rs` ; avec `bv`, elle claque en inverse (Zener). `cjo`, `vj`, `m` et `tt` fixent sa capacité de jonction, qui dépend de la polarisation, et son temps de transit. Les paramètres viennent en général d'une carte `.model NOM D(...)`. Le courant est compté de l'anode vers la cathode. Voir le [guide des diodes](./diodes.md).
 - Les circuits avec une diode sont résolus par Newton-Raphson ; les analyses petits signaux utilisent le circuit linéarisé au point de fonctionnement continu.
 
 - **Transistor bipolaire :** modèle de transport d'Ebers-Moll avec effet Early et capacités de jonction constantes. `current("Q1")` est le courant de collecteur ; `"Q1:b"` et `"Q1:e"` donnent les courants de base et d'émetteur, tous comptés entrant dans le composant.
