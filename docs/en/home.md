@@ -48,6 +48,7 @@ Every guide is a series of short, runnable examples with their real output.
 <a class="em-card" href="./time-domain.md"><span class="em-icon">⏱</span><strong>Time domain</strong><span>Step and impulse responses, transient simulation.</span></a>
 <a class="em-card" href="./diodes.md"><span class="em-icon">▷|</span><strong>Diodes</strong><span>Non-linear circuits: rectifiers, Zener regulators, small signal.</span></a>
 <a class="em-card" href="./transistors.md"><span class="em-icon">⏚</span><strong>Transistors</strong><span>BJT and MOSFET: bias points, amplifiers, CMOS logic.</span></a>
+<a class="em-card" href="./sensitivities.md"><span class="em-icon">∂</span><strong>Sensitivities</strong><span>Which component matters: derivatives, ranking, bias stability.</span></a>
 <a class="em-card" href="./schematics.md"><span class="em-icon">✏️</span><strong>Schematics</strong><span>Automatic SVG drawings, IEC or ANSI, interactive.</span></a>
 <a class="em-card" href="./format.md"><span class="em-icon">📄</span><strong>Netlists & JSON</strong><span>Input syntax, JSON format, validation errors.</span></a>
 </div>

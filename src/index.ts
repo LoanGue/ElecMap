@@ -10,6 +10,7 @@
  * @document ../docs/.build/time-domain.md
  * @document ../docs/.build/diodes.md
  * @document ../docs/.build/transistors.md
+ * @document ../docs/.build/sensitivities.md
  * @document ../docs/.build/schematics.md
  * @document ../docs/.build/format.md
  * @document ../docs/.build/components.md
@@ -33,4 +34,4 @@ export * from "./analysis";
 export * from "./render";
 export * from "./symbolic";
 export { ElecMap } from "./ElecMap";
-export type { AnalysisPoint } from "./ElecMap";
+export type { AnalysisPoint, Sensitivity, SensitivityOptions, SensitivityOutput } from "./ElecMap";

@@ -166,6 +166,51 @@ ${parts.join("\n")}
 </svg>`;
 }
 
+interface Bar {
+  label: string;
+  value: number;
+}
+
+/** Horizontal bar chart, centred on 0 (positive bars right, negative left). */
+function bars(items: Bar[], xLabel: string, width = 640): string {
+  const left = 70;
+  const right = 60;
+  const top = 10;
+  const row = 30;
+  const bottom = 40;
+  const pw = width - left - right;
+  const height = top + items.length * row + bottom;
+  const m = Math.max(...items.map((b) => Math.abs(b.value))) * 1.1 || 1;
+  const tx = (v: number) => left + ((v + m) / (2 * m)) * pw;
+  const ticks = niceTicks(-m, m, 6).filter((t) => Math.abs(t) <= m);
+  const parts: string[] = [];
+  for (const t of ticks) {
+    const x = tx(t).toFixed(1);
+    parts.push(
+      `<line class="grid" x1="${x}" x2="${x}" y1="${top}" y2="${top + items.length * row}"/>`,
+      `<text class="tick" x="${x}" y="${top + items.length * row + 16}" text-anchor="middle">${fmt(t)}</text>`,
+    );
+  }
+  items.forEach((b, i) => {
+    const y = top + i * row;
+    const x0 = tx(0);
+    const x1 = tx(b.value);
+    const cls = b.value >= 0 ? "pos" : "neg";
+    parts.push(
+      `<rect class="bar ${cls}" x="${Math.min(x0, x1).toFixed(1)}" y="${y + 6}" width="${Math.abs(x1 - x0).toFixed(1)}" height="${row - 12}" rx="3"/>`,
+      `<text class="label" x="${left - 10}" y="${y + row / 2}" text-anchor="end" dy="0.32em">${b.label}</text>`,
+      `<text class="value" x="${(b.value >= 0 ? x1 + 6 : x1 - 6).toFixed(1)}" y="${y + row / 2}" text-anchor="${b.value >= 0 ? "start" : "end"}" dy="0.32em">${(Math.abs(b.value) < 5e-4 ? 0 : b.value).toFixed(3)}</text>`,
+    );
+  });
+  parts.push(
+    `<line class="axis" x1="${tx(0).toFixed(1)}" x2="${tx(0).toFixed(1)}" y1="${top}" y2="${top + items.length * row}"/>`,
+    `<text class="label" x="${left + pw / 2}" y="${height - 6}" text-anchor="middle">${xLabel}</text>`,
+  );
+  return `<svg xmlns="http://www.w3.org/2000/svg" class="em-plot" viewBox="0 0 ${width} ${height}" role="img">
+${parts.join("\n")}
+</svg>`;
+}
+
 const clampDb = (values: readonly number[]): number[] => values.map((v) => Math.max(v, -80));
 
 /** Writes every figure into `dir`. */
@@ -521,4 +566,58 @@ export function writeFigures(dir: string, lang: "en" | "fr" = "en"): void {
       `ground-${ground}.svg`,
       ladder.toSVG({ theme: "none", ground, title: t("RC ladder", "Échelle RC") }),
     );
+
+  // ---------------------------------------------------------------- sensitivities
+  const bias = new ElecMap(`
+  VCC vcc 0 12
+  RB1 vcc b 47k
+  RB2 b 0 10k
+  RC vcc c 2.2k
+  RE e 0 470
+  Q1 c b e QN
+  .model QN NPN(BF=200 IS=1e-14)
+  `);
+  save(
+    "bias-sensitivities.svg",
+    bars(
+      bias.sensitivities({ current: "RC" }).map((s) => ({
+        label: s.field === "value" || s.field === "dc" ? s.id : `${s.id}.${s.field}`,
+        value: s.normalized,
+      })),
+      t("Normalised sensitivity of Ic", "Sensibilité normalisée de Ic"),
+    ),
+  );
+  {
+    const beta = [50, 100, 150, 200, 300, 400, 600];
+    const fixed = new ElecMap(`
+  VCC vcc 0 12
+  RB vcc b 1.2meg
+  RC vcc c 2.2k
+  Q1 c b e QN
+  VE e 0 0
+  .model QN NPN(BF=200 IS=1e-14)
+  `);
+    const ic = (c: ElecMap) => beta.map((bf) => c.setValue("Q1", bf, "bf").current("RC") * 1e3);
+    save(
+      "bias-beta.svg",
+      plot({
+        xLabel: "β (BF)",
+        xFormat: (v) => String(Math.round(v)),
+        panels: [
+          {
+            series: [
+              { x: beta, y: ic(bias), label: t("divider + RE", "pont + RE") },
+              {
+                x: beta,
+                y: ic(fixed),
+                label: t("fixed base current", "courant de base fixe"),
+                dashed: true,
+              },
+            ],
+            yLabel: "Ic (mA)",
+          },
+        ],
+      }),
+    );
+  }
 }
