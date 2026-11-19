@@ -464,6 +464,24 @@ pre button {
 .em-plot .c3 {
   stroke: var(--fig-c3);
 }
+.em-plot .bar {
+  stroke: none;
+}
+.em-plot .bar.pos {
+  fill: var(--fig-c1);
+}
+.em-plot .bar.neg {
+  fill: var(--fig-c2);
+}
+.em-plot .axis {
+  stroke: var(--fig-muted);
+  stroke-width: 1.2;
+}
+.em-plot .value {
+  fill: var(--fig-fg);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
 .em-plot .tick {
   fill: var(--fig-muted);
   font-size: 11px;

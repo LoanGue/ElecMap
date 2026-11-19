@@ -7,6 +7,7 @@ import { COMPONENT_CATALOG } from "./format/catalog";
 import type { CircuitJSON, ComponentJSON, NodeName } from "./format/types";
 import type { Complex } from "./math/complex";
 import { MnaSystem } from "./mna/system";
+import { bjtParams, diodeParams, mosfetParams } from "./mna/devices";
 import { operatingPoint } from "./analysis/dc";
 import type { DcOptions } from "./analysis/dc";
 import { acAnalysis, acSweep } from "./analysis/ac";
@@ -37,6 +38,44 @@ import type { OutputSpec, TransferFunction, TransferOptions } from "./analysis/t
 
 /** Analysis point for {@link ElecMap.voltage} / {@link ElecMap.current}. */
 export type AnalysisPoint = "dc" | ({ freq: number } & AcExcitation);
+
+/**
+ * What {@link ElecMap.sensitivity} differentiates: a node voltage (to ground),
+ * a voltage between two nodes, a component current, or any number computed
+ * from the circuit.
+ */
+export type SensitivityOutput =
+  NodeName | [NodeName, NodeName] | { current: string } | ((circuit: ElecMap) => number);
+
+/** Options of {@link ElecMap.sensitivity} and {@link ElecMap.sensitivities}. */
+export interface SensitivityOptions {
+  /**
+   * Where the output is measured: `"dc"` (default) or `{ freq }`, where the
+   * output is the amplitude (modulus) of the phasor. Ignored for a function output.
+   */
+  at?: AnalysisPoint;
+  /** Component field to vary (default: the field of {@link ElecMap.setValue}). */
+  field?: string;
+}
+
+/** Sensitivity of an output to one component field. */
+export interface Sensitivity {
+  /** Component id. */
+  id: string;
+  /** Field varied (`value`, `dc`, `gain`…). */
+  field: string;
+  /** Current value of the field, `p`. */
+  value: number;
+  /** Output at the current value, `y`. */
+  output: number;
+  /** Absolute sensitivity `∂y/∂p`, in output units per field unit. */
+  derivative: number;
+  /**
+   * Normalised sensitivity `(p/y)·∂y/∂p`: the relative change of the output for a
+   * 1 % change of the field is `normalized` %. `NaN` when the output is 0.
+   */
+  normalized: number;
+}
 
 /**
  * Main entry point: a circuit plus every analysis available on it.
@@ -267,19 +306,7 @@ V1 in 0 …"
    * ```
    */
   setValue(id: string, value: number, field?: string): this {
-    const doc = this.compiled.toJSON();
-    const comp = doc.components.find((c) => c.id === id);
-    if (!comp)
-      throw new ElecMapError("NOT_FOUND", `Unknown component "${id}"`, { componentId: id });
-    const key = field ?? defaultField(comp);
-    if (!(key in comp) && key !== "dc" && !(key in COMPONENT_CATALOG[comp.type].numbers)) {
-      throw new ElecMapError("INVALID_ARGUMENT", `Component "${id}" has no field "${key}"`, {
-        componentId: id,
-        field: key,
-      });
-    }
-    (comp as unknown as Record<string, unknown>)[key] = value;
-    this.compiled = compile(doc, { ...this.options, ground: this.compiled.ground });
+    this.compiled = this.compileWith(id, field, value);
     this.systemCache = undefined;
     this.smallSignalCache = undefined;
     this.dcCache = undefined;
@@ -630,6 +657,110 @@ V1 in 0 …"
 
   // ------------------------------------------------------------------- power
 
+  // ----------------------------------------------------------- sensitivities
+
+  /**
+   * Sensitivity of an output to one component field: how much the output moves
+   * when the field changes. The result gives both the derivative `∂y/∂p` and the
+   * normalised sensitivity `(p/y)·∂y/∂p` (a 1 % change of the field moves the
+   * output by `normalized` %).
+   *
+   * The output is a node voltage, a voltage between two nodes, a current
+   * (`{ current: id }`) or a function of the circuit; at `{ freq }` it is the
+   * amplitude of the phasor. The derivative is computed by central differences
+   * with Richardson extrapolation (4 analyses, relative step 10⁻³), so it also
+   * works on non-linear circuits.
+   *
+   * @example
+   * ```ts
+   * const divider = new ElecMap("V1 in 0 10\nR1 in out 1k\nR2 out 0 3k");
+   * const s = divider.sensitivity("out", "R1");
+   * s.output; // 7.5          V(out)
+   * s.derivative; // -0.001875 V/Ω: +1 Ω on R1 → -1.875 mV
+   * s.normalized; // -0.25    +1 % on R1 → -0.25 % on V(out)
+   *
+   * divider.sensitivity("out", "V1").normalized; // 1
+   * divider.sensitivity({ current: "R2" }, "R2").derivative; // -6.25e-7 A/Ω
+   * c.sensitivity("out", "C1", { at: { freq: 1000 } }).normalized; // -0.2830
+   * c.sensitivity((x) => x.transferFunction("out").cutoffFrequency(), "R1").normalized; // -1
+   * ```
+   *
+   * @throws {@link ElecMapError} `NOT_FOUND` for an unknown component,
+   * `INVALID_ARGUMENT` for a field it does not have
+   */
+  sensitivity(
+    output: SensitivityOutput,
+    id: string,
+    options: SensitivityOptions = {},
+  ): Sensitivity {
+    const [comp, field] = fieldOf(this.compiled.toJSON(), id, options.field);
+    const value = fieldValue(comp, field);
+    if (value === undefined) {
+      throw new ElecMapError(
+        "INVALID_ARGUMENT",
+        `Component "${id}" has no value for "${field}": set it first (setValue or the netlist)`,
+        { componentId: id, field },
+      );
+    }
+    const measure = measureOf(output, options.at ?? "dc");
+    const y = measure(this);
+    const at = (p: number) =>
+      measure(new ElecMap(this.docWith(id, field, p), this.clonedOptions()));
+    const h = value === 0 ? 1e-3 : Math.abs(value) * 1e-3;
+    const d = (step: number) => (at(value + step) - at(value - step)) / (2 * step);
+    const derivative = (4 * d(h / 2) - d(h)) / 3;
+    return {
+      id,
+      field,
+      value,
+      output: y,
+      derivative,
+      normalized: y === 0 ? NaN : (derivative * value) / y,
+    };
+  }
+
+  /**
+   * Sensitivities of an output to every component field that has a value (the
+   * default field of each component, see {@link ElecMap.setValue}), sorted by
+   * decreasing `|normalized|`: the first entries are the components that matter most.
+   *
+   * @example
+   * ```ts
+   * const loaded = new ElecMap("V1 in 0 10\nR1 in out 1k\nR2 out 0 3k\nR3 out 0 6k");
+   * loaded.sensitivities("out").map((s) => [s.id, s.normalized]);
+   * // [["V1", 1], ["R1", -0.3333], ["R2", 0.2222], ["R3", 0.1111]]
+   * ```
+   */
+  sensitivities(output: SensitivityOutput, options: { at?: AnalysisPoint } = {}): Sensitivity[] {
+    const result: Sensitivity[] = [];
+    for (const comp of this.compiled.toJSON().components) {
+      if (comp.type === "opamp" && comp.gain === undefined) continue;
+      if (fieldValue(comp, defaultField(comp)) === undefined) continue;
+      result.push(this.sensitivity(output, comp.id, options));
+    }
+    const key = (s: Sensitivity) => (Number.isNaN(s.normalized) ? -1 : Math.abs(s.normalized));
+    return result.sort((a, b) => key(b) - key(a));
+  }
+
+  /** The circuit with one field changed. */
+  private docWith(id: string, field: string | undefined, value: number): CircuitJSON {
+    const doc = this.compiled.toJSON();
+    const [comp, key] = fieldOf(doc, id, field);
+    (comp as unknown as Record<string, unknown>)[key] = value;
+    return doc;
+  }
+
+  private clonedOptions(): CompileOptions {
+    // The copy is built from JSON, whatever the original input format was.
+    const options: CompileOptions = { ...this.options, ground: this.compiled.ground };
+    delete options.format;
+    return options;
+  }
+
+  private compileWith(id: string, field: string | undefined, value: number): CompiledCircuit {
+    return compile(this.docWith(id, field, value), this.clonedOptions());
+  }
+
   /**
    * Power absorbed by each component. DC (default): watts, sources delivering power
    * are negative. `{ freq }`: complex power `S = ½·V·I*` (W + j·var) for the AC sources.
@@ -656,6 +787,28 @@ V1 in 0 …"
     const sol = this.ac(freq, excitation);
     return Object.fromEntries(ids.map((id) => [id, sol.power(id)]));
   }
+}
+
+/** Component and field of `setValue(id, …, field)`, validated. */
+function fieldOf(doc: CircuitJSON, id: string, field?: string): [ComponentJSON, string] {
+  const comp = doc.components.find((c) => c.id === id);
+  if (!comp) throw new ElecMapError("NOT_FOUND", `Unknown component "${id}"`, { componentId: id });
+  const key = field ?? defaultField(comp);
+  if (!(key in comp) && key !== "dc" && !(key in COMPONENT_CATALOG[comp.type].numbers)) {
+    throw new ElecMapError("INVALID_ARGUMENT", `Component "${id}" has no field "${key}"`, {
+      componentId: id,
+      field: key,
+    });
+  }
+  return [comp, key];
+}
+
+/** Current numeric value of a field (missing `dc` = 0, other missing fields: catalogue default). */
+function fieldValue(comp: ComponentJSON, key: string): number | undefined {
+  const v = (comp as unknown as Record<string, unknown>)[key];
+  if (typeof v === "number") return v;
+  if (key === "dc" && v === undefined) return 0;
+  return resolvedValue(comp, key);
 }
 
 function resolveSingleSource(circuit: CompiledCircuit): string {
@@ -693,4 +846,34 @@ function defaultField(c: ComponentJSON): string {
     default:
       return "gain";
   }
+}
+
+/** Field value, with the SPICE default of device parameters that are not set. */
+function resolvedValue(comp: ComponentJSON, key: string): number | undefined {
+  const params =
+    comp.type === "diode"
+      ? diodeParams(comp)
+      : comp.type === "bjt"
+        ? bjtParams(comp)
+        : comp.type === "mosfet"
+          ? { ...mosfetParams(comp), w: comp.w ?? 100e-6, l: comp.l ?? 100e-6 }
+          : undefined;
+  const v = (params as Record<string, unknown> | undefined)?.[key];
+  return typeof v === "number" ? v : undefined;
+}
+
+/** Output of {@link ElecMap.sensitivity} as a function of a circuit. */
+function measureOf(output: SensitivityOutput, at: AnalysisPoint): (c: ElecMap) => number {
+  if (typeof output === "function") return output;
+  const real = (v: number | Complex) => (typeof v === "number" ? v : v.abs());
+  const point = at as { freq: number } & AcExcitation;
+  if (typeof output === "string") {
+    return (c) => real(at === "dc" ? c.voltage(output) : c.voltage(output, point));
+  }
+  if (Array.isArray(output)) {
+    const [a, b] = output;
+    return (c) => real(at === "dc" ? c.voltage(a, b) : c.voltage(a, b, point));
+  }
+  const id = output.current;
+  return (c) => real(at === "dc" ? c.current(id) : c.current(id, point));
 }
