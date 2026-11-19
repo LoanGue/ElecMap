@@ -47,6 +47,7 @@ Chaque guide est une suite de courts exemples exécutables, accompagnés de leur
 <a class="em-card" href="./impedances-equivalents.md"><span class="em-icon">Ω</span><strong>Impédances et équivalents</strong><span>R, L, C équivalents, Z(s), Thévenin et Norton.</span></a>
 <a class="em-card" href="./time-domain.md"><span class="em-icon">⏱</span><strong>Domaine temporel</strong><span>Réponses indicielle et impulsionnelle, simulation transitoire.</span></a>
 <a class="em-card" href="./diodes.md"><span class="em-icon">▷|</span><strong>Diodes</strong><span>Circuits non linéaires : redresseurs, régulateurs Zener, petits signaux.</span></a>
+<a class="em-card" href="./transistors.md"><span class="em-icon">⏚</span><strong>Transistors</strong><span>Bipolaires et MOSFET : polarisation, amplificateurs, logique CMOS.</span></a>
 <a class="em-card" href="./schematics.md"><span class="em-icon">✏️</span><strong>Schémas</strong><span>Dessins SVG automatiques, CEI ou ANSI, interactifs.</span></a>
 <a class="em-card" href="./format.md"><span class="em-icon">📄</span><strong>Netlists et JSON</strong><span>Syntaxe d'entrée, format JSON, erreurs de validation.</span></a>
 </div>
@@ -63,4 +64,4 @@ Chaque guide est une suite de courts exemples exécutables, accompagnés de leur
 | la réponse au cours du temps                              | {@link TransferFunction.stepResponse}, {@link ElecMap.transient}                                        |
 | un dessin                                                 | {@link ElecMap.toSVG}                                                                                   |
 
-ElecMap n'a **aucune dépendance à l'exécution**, est distribué en ESM + CommonJS avec des types complets, et fonctionne sous Node.js ≥ 18 et dans les navigateurs. Composants : R, L, C, bobines couplées, sources de tension et de courant, sources commandées (E, F, G, H), amplificateurs opérationnels (idéal, gain fini, GBW), interrupteurs, et diodes / diodes Zener avec cartes `.model` SPICE.
+ElecMap n'a **aucune dépendance à l'exécution**, est distribué en ESM + CommonJS avec des types complets, et fonctionne sous Node.js ≥ 18 et dans les navigateurs. Composants : R, L, C, bobines couplées, sources de tension et de courant, sources commandées (E, F, G, H), amplificateurs opérationnels (idéal, gain fini, GBW), interrupteurs, diodes / diodes Zener, transistors bipolaires et MOSFET avec cartes `.model` SPICE.

@@ -47,6 +47,7 @@ Every guide is a series of short, runnable examples with their real output.
 <a class="em-card" href="./impedances-equivalents.md"><span class="em-icon">Ω</span><strong>Impedances & equivalents</strong><span>Equivalent R, L, C, Z(s), Thévenin and Norton.</span></a>
 <a class="em-card" href="./time-domain.md"><span class="em-icon">⏱</span><strong>Time domain</strong><span>Step and impulse responses, transient simulation.</span></a>
 <a class="em-card" href="./diodes.md"><span class="em-icon">▷|</span><strong>Diodes</strong><span>Non-linear circuits: rectifiers, Zener regulators, small signal.</span></a>
+<a class="em-card" href="./transistors.md"><span class="em-icon">⏚</span><strong>Transistors</strong><span>BJT and MOSFET: bias points, amplifiers, CMOS logic.</span></a>
 <a class="em-card" href="./schematics.md"><span class="em-icon">✏️</span><strong>Schematics</strong><span>Automatic SVG drawings, IEC or ANSI, interactive.</span></a>
 <a class="em-card" href="./format.md"><span class="em-icon">📄</span><strong>Netlists & JSON</strong><span>Input syntax, JSON format, validation errors.</span></a>
 </div>
@@ -63,4 +64,4 @@ Every guide is a series of short, runnable examples with their real output.
 | the response over time               | {@link TransferFunction.stepResponse}, {@link ElecMap.transient}                                        |
 | a drawing                            | {@link ElecMap.toSVG}                                                                                   |
 
-ElecMap has **no runtime dependencies**, ships ESM + CommonJS with full types, and runs in Node.js ≥ 18 and in browsers. Components: R, L, C, coupled inductors, V and I sources, controlled sources (E, F, G, H), op-amps (ideal, finite gain, GBW), switches, and diodes / Zener diodes with SPICE `.model` cards.
+ElecMap has **no runtime dependencies**, ships ESM + CommonJS with full types, and runs in Node.js ≥ 18 and in browsers. Components: R, L, C, coupled inductors, V and I sources, controlled sources (E, F, G, H), op-amps (ideal, finite gain, GBW), switches, diodes / Zener diodes, bipolar transistors and MOSFETs with SPICE `.model` cards.

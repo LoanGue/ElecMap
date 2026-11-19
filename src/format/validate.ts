@@ -124,6 +124,18 @@ function checkComponent(c: unknown, index: number, issues: ValidationIssue[]): c
       ok = false;
     }
   }
+  const polarities =
+    spec.type === "bjt" ? ["npn", "pnp"] : spec.type === "mosfet" ? ["nmos", "pmos"] : undefined;
+  if (polarities && !polarities.includes(c["polarity"] as string)) {
+    err("MALFORMED", `${id}: "polarity" must be "${polarities.join('" or "')}"`, id);
+    ok = false;
+  }
+  if ((spec.type === "bjt" || spec.type === "mosfet") && c["model"] !== undefined) {
+    if (typeof c["model"] !== "string") {
+      err("MALFORMED", `${id}: "model" must be a string`, id);
+      ok = false;
+    }
+  }
   if (spec.type === "switch" && typeof c["closed"] !== "boolean") {
     err("MALFORMED", `${id}: "closed" must be a boolean`, id);
     ok = false;
@@ -244,6 +256,8 @@ export function validateCircuit(input: unknown, ground = "0"): ValidationIssue[]
     if (
       c.type !== "coupling" &&
       c.type !== "opamp" &&
+      c.type !== "bjt" &&
+      c.type !== "mosfet" &&
       c.nodes[0] !== undefined &&
       g(c.nodes[0]) === g(c.nodes[1])
     ) {
@@ -268,6 +282,19 @@ export function validateCircuit(input: unknown, ground = "0"): ValidationIssue[]
       case "opamp":
         any.union(g(c.nodes[2]), ground);
         dc.union(g(c.nodes[2]), ground);
+        break;
+      case "bjt":
+        for (const n of [c.nodes[0], c.nodes[2]]) {
+          any.union(g(c.nodes[1]), g(n));
+          dc.union(g(c.nodes[1]), g(n));
+        }
+        break;
+      case "mosfet":
+        // Channel (drain-source) conducts in DC; the gate is capacitive only.
+        any.union(g(c.nodes[0]), g(c.nodes[2]));
+        dc.union(g(c.nodes[0]), g(c.nodes[2]));
+        any.union(g(c.nodes[1]), g(c.nodes[2]));
+        any.union(g(c.nodes[3]), g(c.nodes[2]));
         break;
       case "switch":
         if (c.closed || c.roff !== undefined) {

@@ -41,22 +41,26 @@ Examples: `1k`, `4.7u`, `100nF`, `1e-3`, `2MEG`. The European notation is suppor
 
 ### Elements
 
-| Line                                         | Component                                |
-| -------------------------------------------- | ---------------------------------------- |
-| `Rname n1 n2 value`                          | resistor (Ω)                             |
-| `Cname n1 n2 value [IC=v]`                   | capacitor (F), initial voltage           |
-| `Lname n1 n2 value [IC=i]`                   | inductor (H), initial current            |
-| `Vname n+ n- [DC v] [AC mag [phase]] [wave]` | independent voltage source               |
-| `Iname n+ n- [DC i] [AC mag [phase]] [wave]` | independent current source               |
-| `Ename n+ n- nc+ nc- gain`                   | voltage-controlled voltage source        |
-| `Gname n+ n- nc+ nc- gm`                     | voltage-controlled current source        |
-| `Fname n+ n- Vctrl gain`                     | current-controlled current source        |
-| `Hname n+ n- Vctrl r`                        | current-controlled voltage source        |
-| `Kname L1 L2 k`                              | coupled inductors, `0 < k ≤ 1`           |
-| `Xname in+ in- out OPAMP [GAIN=a] [GBW=f]`   | op-amp _(ElecMap extension)_             |
-| `Sname n1 n2 ON\|OFF [RON=r] [ROFF=r]`       | fixed-state switch _(ElecMap extension)_ |
-| `Dname anode cathode [model] [area] [K=v…]`  | diode, Zener (see [diodes](./diodes.md)) |
-| `.model name D(IS=… N=… RS=… BV=…)`          | diode model card                         |
+| Line                                         | Component                                                |
+| -------------------------------------------- | -------------------------------------------------------- |
+| `Rname n1 n2 value`                          | resistor (Ω)                                             |
+| `Cname n1 n2 value [IC=v]`                   | capacitor (F), initial voltage                           |
+| `Lname n1 n2 value [IC=i]`                   | inductor (H), initial current                            |
+| `Vname n+ n- [DC v] [AC mag [phase]] [wave]` | independent voltage source                               |
+| `Iname n+ n- [DC i] [AC mag [phase]] [wave]` | independent current source                               |
+| `Ename n+ n- nc+ nc- gain`                   | voltage-controlled voltage source                        |
+| `Gname n+ n- nc+ nc- gm`                     | voltage-controlled current source                        |
+| `Fname n+ n- Vctrl gain`                     | current-controlled current source                        |
+| `Hname n+ n- Vctrl r`                        | current-controlled voltage source                        |
+| `Kname L1 L2 k`                              | coupled inductors, `0 < k ≤ 1`                           |
+| `Xname in+ in- out OPAMP [GAIN=a] [GBW=f]`   | op-amp _(ElecMap extension)_                             |
+| `Sname n1 n2 ON\|OFF [RON=r] [ROFF=r]`       | fixed-state switch _(ElecMap extension)_                 |
+| `Dname anode cathode [model] [area] [K=v…]`  | diode, Zener (see [diodes](./diodes.md))                 |
+| `.model name D(IS=… N=… RS=… BV=…)`          | diode model card                                         |
+| `Qname c b e [sub] [model] [area] [K=v…]`    | bipolar transistor (see [transistors](./transistors.md)) |
+| `Mname d g s [b] model [W=w] [L=l] [K=v…]`   | MOSFET, bulk tied to the source if omitted               |
+| `.model name NPN                             | PNP(IS=… BF=… VAF=…)`                                    | bipolar model card          |
+| `.model name NMOS                            | PMOS(VTO=… KP=… LAMBDA=…)`                               | MOSFET model card (level 1) |
 
 A bare number after the nodes of a source is its DC value (`V1 a 0 5`). Phases are in degrees.
 

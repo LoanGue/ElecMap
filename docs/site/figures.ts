@@ -412,6 +412,110 @@ export function writeFigures(dir: string, lang: "en" | "fr" = "en"): void {
     );
   }
 
+  const q2n2222 = ".model Q2N2222 NPN(IS=14.34f BF=255.9 VAF=74.03 CJE=22p CJC=7.3p)";
+  const ceStage = new ElecMap(`
+  VCC vcc 0 12
+  RB1 vcc b 47k
+  RB2 b 0 10k
+  RC vcc c 2.2k
+  RE e 0 470
+  Q1 c b e Q2N2222
+  ${q2n2222}
+  `);
+  save(
+    "ce-stage.svg",
+    ceStage.toSVG({
+      theme: "none",
+      showValues: true,
+      title: t("Common-emitter bias", "Polarisation émetteur commun"),
+    }),
+  );
+  {
+    const amp = new ElecMap(`
+    VCC vcc 0 12
+    VS in 0 AC 1
+    CIN in b 10u
+    RB1 vcc b 47k
+    RB2 b 0 10k
+    RC vcc c 2.2k
+    RE e 0 470
+    CE e 0 100u
+    Q1 c b e Q2N2222
+    ${q2n2222}
+    `);
+    const bode = amp
+      .transferFunction({ input: "VS", output: "c" })
+      .bode({ fStart: 1, fStop: 1e9, points: 120 });
+    save(
+      "ce-bode.svg",
+      plot({
+        logX: true,
+        xLabel: t("Frequency (Hz)", "Fréquence (Hz)"),
+        panels: [
+          {
+            series: [{ x: bode.freq, y: clampDb(bode.magnitudeDb) }],
+            yLabel: t("Gain (dB)", "Gain (dB)"),
+          },
+          {
+            series: [{ x: bode.freq, y: bode.phase }],
+            yLabel: t("Phase (°)", "Phase (°)"),
+          },
+        ],
+      }),
+    );
+  }
+  const csStage = new ElecMap(`
+  VDD vdd 0 10
+  VG g 0 DC 3 AC 1
+  RD vdd d 4.7k
+  M1 d g 0 0 NMOD W=100u L=10u
+  .model NMOD NMOS(VTO=1.5 KP=50u LAMBDA=0.02)
+  `);
+  save(
+    "cs-stage.svg",
+    csStage.toSVG({
+      theme: "none",
+      showValues: true,
+      title: t("Common-source stage", "Étage source commune"),
+    }),
+  );
+  {
+    const inv = new ElecMap(`
+    VDD vdd 0 5
+    VIN in 0 0
+    MP out in vdd vdd PMOS VTO=-0.7 KP=50u W=20u L=1u
+    MN out in 0 0 NMOS VTO=0.7 KP=110u W=10u L=1u
+    `);
+    save(
+      "cmos-inverter.svg",
+      inv.toSVG({ theme: "none", showValues: true, title: t("CMOS inverter", "Inverseur CMOS") }),
+    );
+    const vin: number[] = [];
+    const vout: number[] = [];
+    const idd: number[] = [];
+    for (let k = 0; k <= 100; k++) {
+      const v = (5 * k) / 100;
+      const op = inv.setValue("VIN", v).operatingPoint();
+      vin.push(v);
+      vout.push(op.voltage("out"));
+      idd.push(op.current("MN") * 1e6);
+    }
+    save(
+      "cmos-transfer.svg",
+      plot({
+        xLabel: "V(in) (V)",
+        xFormat: (v) => String(Number(v.toPrecision(3))),
+        panels: [
+          {
+            series: [{ x: vin, y: vout, label: "V(out)" }],
+            yLabel: t("Voltage (V)", "Tension (V)"),
+          },
+          { series: [{ x: vin, y: idd }], yLabel: "I(MN) (µA)" },
+        ],
+      }),
+    );
+  }
+
   for (const ground of ["rail", "symbols"] as const)
     save(
       `ground-${ground}.svg`,

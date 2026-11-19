@@ -1,5 +1,5 @@
 import type { PlacedComponent, SchematicLayout } from "./layout";
-import { PIN_SPAN } from "./layout";
+import { PIN_SPAN, hasBulkPin } from "./layout";
 
 /** Options of {@link renderSvg}. */
 export interface SvgOptions {
@@ -162,6 +162,57 @@ function opampSymbol(
 }
 
 /**
+ * Transistor symbol, drawn from the base / gate pin (`pins[1]`): the top pin is
+ * 3 cells right and 3 up, the bottom pin 3 cells right and 3 down.
+ */
+function transistorSymbol(
+  c: PlacedComponent,
+  px: (x: number) => number,
+  py: (y: number) => number,
+  u: number,
+): string {
+  const comp = c.component;
+  const ctrl = c.pins[1] as PlacedComponent["pins"][0];
+  const x0 = ctrl.x + 3;
+  const y0 = ctrl.y - 3;
+  const X = (dx: number) => r(px(x0 + dx));
+  const Y = (dy: number) => r(py(y0 + dy));
+  /** Filled arrow head with its tip at (tx, ty), pointing along (dx, dy). */
+  const arrow = (tx: number, ty: number, dx: number, dy: number) => {
+    const n = Math.hypot(dx, dy);
+    const [ux, uy] = [dx / n, dy / n];
+    const [bx, by] = [tx - 0.55 * ux, ty - 0.55 * uy];
+    const w = 0.28;
+    return (
+      `<path class="f" d="M${X(tx)} ${Y(ty)}L${X(bx - w * uy)} ${Y(by + w * ux)}` +
+      `L${X(bx + w * uy)} ${Y(by - w * ux)}Z"/>`
+    );
+  };
+  if (comp.type === "bjt") {
+    const d =
+      `M${X(0)} ${Y(0)}V${Y(1.6)}L${X(-1)} ${Y(2.5)}` +
+      `M${X(0)} ${Y(6)}V${Y(4.4)}L${X(-1)} ${Y(3.5)}` +
+      `M${X(-1)} ${Y(1.9)}V${Y(4.1)}M${X(-3)} ${Y(3)}H${X(-1)}`;
+    const ring = `<circle class="s" cx="${X(-0.55)}" cy="${Y(3)}" r="${r(1.75 * u)}"/>`;
+    // Emitter arrow: out of the base for an NPN (bottom lead), into it for a PNP (top lead).
+    const head = comp.polarity === "npn" ? arrow(-0.1, 4.31, 1, 0.9) : arrow(-0.85, 2.36, -1, 0.9);
+    return `<path class="s" d="${d}"/>${ring}${head}`;
+  }
+  const n = comp.type === "mosfet" && comp.polarity === "nmos";
+  const sourceY = n ? 3.9 : 2.1;
+  let d =
+    `M${X(-3)} ${Y(3)}H${X(-1.3)}M${X(-1.3)} ${Y(1.9)}V${Y(4.1)}` +
+    `M${X(-0.7)} ${Y(1.6)}V${Y(2.4)}M${X(-0.7)} ${Y(2.6)}V${Y(3.4)}M${X(-0.7)} ${Y(3.6)}V${Y(4.4)}` +
+    `M${X(0)} ${Y(0)}V${Y(2.1)}H${X(-0.7)}M${X(0)} ${Y(6)}V${Y(3.9)}H${X(-0.7)}`;
+  d += hasBulkPin(comp)
+    ? `M${X(-0.7)} ${Y(3)}H${X(2)}`
+    : `M${X(-0.7)} ${Y(3)}H${X(0)}V${Y(sourceY)}`;
+  // Bulk arrow: into the channel for an NMOS, out of it for a PMOS.
+  const head = n ? arrow(-0.65, 3, -1, 0) : arrow(-0.02, 3, 1, 0);
+  return `<path class="s" d="${d}"/>${head}`;
+}
+
+/**
  * Renders a {@link SchematicLayout} as a standalone SVG document.
  * Elements carry `data-id` (components) and `data-node` (nets) attributes for interactivity.
  */
@@ -223,6 +274,8 @@ export function renderSvg(layout: SchematicLayout, options: SvgOptions = {}): st
     const parts: string[] = [];
     if (c.type === "opamp") {
       parts.push(opampSymbol(c, px, py, u));
+    } else if (c.type === "bjt" || c.type === "mosfet") {
+      parts.push(transistorSymbol(c, px, py, u));
     } else {
       const p0 = c.pins[0] as PlacedComponent["pins"][0];
       parts.push(

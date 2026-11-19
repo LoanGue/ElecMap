@@ -232,6 +232,81 @@ export interface DiodeJSON extends ComponentBase {
   cjo?: number;
 }
 
+/**
+ * Bipolar junction transistor (SPICE `Q`), `nodes = [collector, base, emitter]`,
+ * transport (Ebers-Moll / Gummel-Poon without high injection) model:
+ *
+ * `Ic = (Ibe − Ibc)·(1 − Vbc/vaf − Vbe/var) − Ibc/br`, `Ib = Ibe/bf + Ibc/br`,
+ *
+ * with `Ibe = is·(e^(Vbe/(nf·Vt)) − 1)` and `Ibc = is·(e^(Vbc/(nr·Vt)) − 1)`
+ * (voltages and currents reversed for a PNP). Parameters left out take their
+ * SPICE default.
+ */
+export interface BjtJSON extends ComponentBase {
+  type: "bjt";
+  nodes: [NodeName, NodeName, NodeName];
+  polarity: "npn" | "pnp";
+  /** Name of the `.model` card the parameters come from (informative, kept for SPICE export). */
+  model?: string;
+  /** Transport saturation current (A, default 1e-16). */
+  is?: number;
+  /** Forward current gain β (default 100). */
+  bf?: number;
+  /** Reverse current gain (default 1). */
+  br?: number;
+  /** Forward emission coefficient (default 1). */
+  nf?: number;
+  /** Reverse emission coefficient (default 1). */
+  nr?: number;
+  /** Forward Early voltage (V, default ∞: no Early effect). */
+  vaf?: number;
+  /** Reverse Early voltage (V, default ∞). */
+  var?: number;
+  /** Base-emitter junction capacitance (F, default 0), taken as constant. */
+  cje?: number;
+  /** Base-collector junction capacitance (F, default 0), taken as constant. */
+  cjc?: number;
+}
+
+/**
+ * MOSFET (SPICE `M`), `nodes = [drain, gate, source, bulk]`, level 1
+ * (Shichman-Hodges) model with `β = kp·w/l` and
+ * `Vth = vto + gamma·(√(phi − Vbs) − √phi)`:
+ *
+ * - cut-off (`Vgs ≤ Vth`): `Id = 0`;
+ * - linear (`Vds < Vgs − Vth`): `Id = β·(Vgs − Vth − Vds/2)·Vds·(1 + lambda·Vds)`;
+ * - saturation: `Id = β/2·(Vgs − Vth)²·(1 + lambda·Vds)`.
+ *
+ * Drain and source swap when `Vds < 0`; voltages and currents are reversed for
+ * a PMOS (whose `vto` is negative, as in SPICE). Parameters left out take their
+ * SPICE default.
+ */
+export interface MosfetJSON extends ComponentBase {
+  type: "mosfet";
+  nodes: [NodeName, NodeName, NodeName, NodeName];
+  polarity: "nmos" | "pmos";
+  /** Name of the `.model` card the parameters come from (informative, kept for SPICE export). */
+  model?: string;
+  /** Zero-bias threshold voltage (V, default 0; negative for an enhancement PMOS). */
+  vto?: number;
+  /** Transconductance parameter (A/V², default 2e-5). */
+  kp?: number;
+  /** Channel-length modulation (1/V, default 0). */
+  lambda?: number;
+  /** Body-effect coefficient (√V, default 0). */
+  gamma?: number;
+  /** Surface potential (V, default 0.6). */
+  phi?: number;
+  /** Gate-source overlap capacitance per metre of width (F/m, default 0). */
+  cgso?: number;
+  /** Gate-drain overlap capacitance per metre of width (F/m, default 0). */
+  cgdo?: number;
+  /** Channel width (m, default 100 µm). */
+  w?: number;
+  /** Channel length (m, default 100 µm). */
+  l?: number;
+}
+
 /** Any component of the canonical format. */
 export type ComponentJSON =
   | ResistorJSON
@@ -246,7 +321,9 @@ export type ComponentJSON =
   | OpAmpJSON
   | CouplingJSON
   | SwitchJSON
-  | DiodeJSON;
+  | DiodeJSON
+  | BjtJSON
+  | MosfetJSON;
 
 /** Discriminant of {@link ComponentJSON}. */
 export type ComponentType = ComponentJSON["type"];

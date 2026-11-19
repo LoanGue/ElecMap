@@ -1,5 +1,17 @@
 import type { ComponentJSON, ComponentType, NodeName } from "../format/types";
-import { diodeCurrent, diodeParams, limitDiode } from "./devices";
+import {
+  bjtCurrents,
+  bjtParams,
+  diodeCurrent,
+  diodeParams,
+  limitDiode,
+  limitDrain,
+  limitGate,
+  limitJunction,
+  mosfetCurrent,
+  mosfetParams,
+  mosfetThreshold,
+} from "./devices";
 
 /**
  * One term `(g + s·c) · x[index]` of a {@link LinearForm}.
@@ -83,6 +95,18 @@ export interface LoadContext {
   readonly gmin: number;
 }
 
+/** One terminal of a multi-terminal device, with the current flowing into it. */
+export interface Terminal {
+  /** Short name used in `"Q1:b"` (`c`, `b`, `e`, `d`, `g`, `s`…). */
+  name: string;
+  /** Long name, also accepted (`collector`, `base`…). */
+  alias: string;
+  /** Node the terminal is connected to. */
+  node: NodeName;
+  /** Current flowing into the device through this terminal. */
+  form: LinearForm;
+}
+
 /**
  * MNA model of a component type: how many extra unknowns (branch currents) it
  * needs, how it stamps `G` and `C` (the system is `(G + s·C)·x = b`), how its
@@ -90,8 +114,13 @@ export interface LoadContext {
  * in `b`.
  */
 export interface ComponentModel<T extends ComponentJSON = ComponentJSON> {
-  /** Number of branch-current unknowns (0 or 1). */
+  /**
+   * Number of branch-current unknowns. They are contiguous: `ctx.branch(id)` is
+   * the first one, `ctx.branch(id) + 1` the next…
+   */
   branches(c: T): number;
+  /** Names of the extra branch unknowns (after the first), e.g. `[":b"]` → `I(Q1:b)`. */
+  branchSuffixes?: readonly string[];
   stamp(c: T, ctx: StampContext): void;
   /** Current through the component, from its first node to its second node. */
   current(c: T, ctx: FormContext): LinearForm;
@@ -103,6 +132,8 @@ export interface ComponentModel<T extends ComponentJSON = ComponentJSON> {
    * {@link ComponentModel.stamp} leaves empty.
    */
   load?(c: T, ctx: LoadContext): void;
+  /** Multi-terminal devices: the current into each terminal (they sum to zero). */
+  terminals?(c: T, ctx: FormContext): Terminal[];
 }
 
 const term = (index: number, g: number, c = 0): LinearTerm => ({ index, g, c });
@@ -139,6 +170,197 @@ const branchForm = (k: number): LinearForm => form([term(k, 1)]);
 /** Admittance current form `(g + s·c)·(Va − Vb)`. */
 const admittanceForm = (a: number, b: number, g: number, c: number): LinearForm =>
   form([term(a, g, c), term(b, -g, -c)]);
+
+/**
+ * Stamps one linearised device row `I = sign·F(u)`, where each controlling
+ * voltage is `uⱼ = sign·(V(aⱼ) − V(bⱼ))` and `gⱼ = ∂F/∂uⱼ` at the point `uⱼ`:
+ * `I − Σ gⱼ·(V(aⱼ) − V(bⱼ)) = sign·(F − Σ gⱼ·uⱼ)`.
+ */
+function stampDeviceRow(
+  ctx: LoadContext,
+  row: number,
+  sign: number,
+  f: number,
+  parts: { a: number; b: number; g: number; u: number }[],
+): void {
+  ctx.addJ(row, row, 1);
+  let rhs = f;
+  for (const { a, b, g, u } of parts) {
+    ctx.addJ(row, a, -g);
+    ctx.addJ(row, b, g);
+    rhs -= g * u;
+  }
+  ctx.addB(row, sign * rhs);
+}
+
+/** Value of unknown `i` in the iterate (0 for ground). */
+const valueAt = (ctx: LoadContext, i: number): number => (i < 0 ? 0 : (ctx.x[i] as number));
+
+type BjtModel = ComponentModel<Extract<ComponentJSON, { type: "bjt" }>>;
+type MosfetModel = ComponentModel<Extract<ComponentJSON, { type: "mosfet" }>>;
+
+const bjtTerminals: BjtModel["terminals"] = (c, ctx) => {
+  const [nc, nb, ne] = c.nodes.map((n) => ctx.node(n)) as [number, number, number];
+  const k = ctx.branch(c.id);
+  const cje = c.cje ?? 0;
+  const cjc = c.cjc ?? 0;
+  return [
+    {
+      name: "c",
+      alias: "collector",
+      node: c.nodes[0],
+      form: form([term(k, 1), term(nc, 0, cjc), term(nb, 0, -cjc)]),
+    },
+    {
+      name: "b",
+      alias: "base",
+      node: c.nodes[1],
+      form: form([term(k + 1, 1), term(nb, 0, cje + cjc), term(ne, 0, -cje), term(nc, 0, -cjc)]),
+    },
+    {
+      name: "e",
+      alias: "emitter",
+      node: c.nodes[2],
+      form: form([term(k, -1), term(k + 1, -1), term(ne, 0, cje), term(nb, 0, -cje)]),
+    },
+  ].map((t) => ({ ...t, form: form(t.form.terms.filter((x) => x.g !== 0 || x.c !== 0)) }));
+};
+
+const bjtModel: BjtModel = {
+  // Two branch unknowns: the collector current Ic (collector → emitter) and the
+  // base current Ib (base → emitter); the emitter carries −(Ic + Ib).
+  branches: () => 2,
+  branchSuffixes: [":b"],
+  stamp(c, ctx) {
+    const [nc, nb, ne] = c.nodes.map((n) => ctx.node(n)) as [number, number, number];
+    const k = ctx.branch(c.id);
+    stampBranchIncidence(ctx, k, nc, ne);
+    stampBranchIncidence(ctx, k + 1, nb, ne);
+    if (c.cje) stampAdmittance(ctx, nb, ne, 0, c.cje);
+    if (c.cjc) stampAdmittance(ctx, nb, nc, 0, c.cjc);
+  },
+  current(c, ctx) {
+    return (bjtTerminals(c, ctx) as [Terminal])[0].form;
+  },
+  terminals: bjtTerminals,
+  load(c, ctx) {
+    const p = bjtParams(c);
+    const [nc, nb, ne] = c.nodes.map((n) => ctx.node(n)) as [number, number, number];
+    const k = ctx.branch(c.id);
+    let vbe = p.sign * (valueAt(ctx, nb) - valueAt(ctx, ne));
+    let vbc = p.sign * (valueAt(ctx, nb) - valueAt(ctx, nc));
+    if (ctx.state) {
+      const s = ctx.state;
+      if (ctx.initial) {
+        vbe = p.vcritBe;
+        vbc = 0;
+      } else if (s["vbe"] !== undefined && s["vbc"] !== undefined) {
+        const be = limitJunction(vbe, s["vbe"], p.vtf, p.vcritBe);
+        const bc = limitJunction(vbc, s["vbc"], p.vtr, p.vcritBc);
+        if (be.limited || bc.limited) ctx.limited();
+        vbe = be.v;
+        vbc = bc.v;
+      }
+      s["vbe"] = vbe;
+      s["vbc"] = vbc;
+    }
+    const d = bjtCurrents(vbe, vbc, p, ctx.gmin);
+    stampDeviceRow(ctx, k, p.sign, d.ic, [
+      { a: nb, b: ne, g: d.dicBe, u: vbe },
+      { a: nb, b: nc, g: d.dicBc, u: vbc },
+    ]);
+    stampDeviceRow(ctx, k + 1, p.sign, d.ib, [
+      { a: nb, b: ne, g: d.dibBe, u: vbe },
+      { a: nb, b: nc, g: d.dibBc, u: vbc },
+    ]);
+  },
+};
+
+const mosfetTerminals: MosfetModel["terminals"] = (c, ctx) => {
+  const [nd, ng, ns] = c.nodes.map((n) => ctx.node(n)) as [number, number, number, number];
+  const k = ctx.branch(c.id);
+  const { cgs, cgd } = mosfetParams(c);
+  const clean = (terms: LinearTerm[]) => form(terms.filter((x) => x.g !== 0 || x.c !== 0));
+  return [
+    {
+      name: "d",
+      alias: "drain",
+      node: c.nodes[0],
+      form: clean([term(k, 1), term(nd, 0, cgd), term(ng, 0, -cgd)]),
+    },
+    {
+      name: "g",
+      alias: "gate",
+      node: c.nodes[1],
+      form: clean([term(ng, 0, cgs + cgd), term(ns, 0, -cgs), term(nd, 0, -cgd)]),
+    },
+    {
+      name: "s",
+      alias: "source",
+      node: c.nodes[2],
+      form: clean([term(k, -1), term(ns, 0, cgs), term(ng, 0, -cgs)]),
+    },
+    { name: "b", alias: "bulk", node: c.nodes[3], form: form([]) },
+  ];
+};
+
+const mosfetModel: MosfetModel = {
+  // One branch unknown: the drain current Id (drain → source through the channel).
+  branches: () => 1,
+  stamp(c, ctx) {
+    const [nd, ng, ns] = c.nodes.map((n) => ctx.node(n)) as [number, number, number, number];
+    stampBranchIncidence(ctx, ctx.branch(c.id), nd, ns);
+    const { cgs, cgd } = mosfetParams(c);
+    if (cgs) stampAdmittance(ctx, ng, ns, 0, cgs);
+    if (cgd) stampAdmittance(ctx, ng, nd, 0, cgd);
+  },
+  current(c, ctx) {
+    return (mosfetTerminals(c, ctx) as [Terminal])[0].form;
+  },
+  terminals: mosfetTerminals,
+  load(c, ctx) {
+    const p = mosfetParams(c);
+    const [nd, ng, ns, nb] = c.nodes.map((n) => ctx.node(n)) as [number, number, number, number];
+    const k = ctx.branch(c.id);
+    const vs = valueAt(ctx, ns);
+    let vgs = p.sign * (valueAt(ctx, ng) - vs);
+    let vds = p.sign * (valueAt(ctx, nd) - vs);
+    const vbs = p.sign * (valueAt(ctx, nb) - vs);
+    if (ctx.state) {
+      const s = ctx.state;
+      const [ogs, ods, obs] = [s["vgs"], s["vds"], s["vbs"]];
+      if (ctx.initial) {
+        vgs = p.vto;
+        vds = 0;
+      } else if (ogs !== undefined && ods !== undefined && obs !== undefined) {
+        const von = mosfetThreshold(obs, p).vth;
+        let ngs: number;
+        let nds: number;
+        if (ods >= 0) {
+          ngs = limitGate(vgs, ogs, von);
+          nds = limitDrain(ngs === vgs ? vds : ngs - (vgs - vds), ods);
+        } else {
+          const vgd = vgs - vds;
+          const ngd = limitGate(vgd, ogs - ods, von);
+          nds = -limitDrain(-(ngd === vgd ? vds : vgs - ngd), -ods);
+          ngs = ngd === vgd && nds === vds ? vgs : ngd + nds;
+        }
+        if (ngs !== vgs || nds !== vds) ctx.limited();
+        vgs = ngs;
+        vds = nds;
+      }
+      s["vgs"] = vgs;
+      s["vds"] = vds;
+      s["vbs"] = vbs;
+    }
+    const m = mosfetCurrent(vgs, vds, vbs, p);
+    stampDeviceRow(ctx, k, p.sign, m.id + ctx.gmin * vds, [
+      { a: ng, b: ns, g: m.gm, u: vgs },
+      { a: nd, b: ns, g: m.gds + ctx.gmin, u: vds },
+      { a: nb, b: ns, g: m.gmbs, u: vbs },
+    ]);
+  },
+};
 
 export type ModelMap = {
   [K in ComponentType]: ComponentModel<Extract<ComponentJSON, { type: K }>>;
@@ -358,6 +580,9 @@ export const MODELS: ModelMap = {
       ctx.addB(b, i - g * vj);
     },
   },
+
+  bjt: bjtModel,
+  mosfet: mosfetModel,
 };
 
 /** Returns the built-in model of a component. */

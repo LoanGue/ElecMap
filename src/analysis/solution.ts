@@ -1,5 +1,6 @@
 import { Complex } from "../math/complex";
 import type { NodeName } from "../format/types";
+import type { LinearForm } from "../mna/models";
 import type { MnaSystem, SourceValues } from "../mna/system";
 
 /** Result of a DC (operating point) analysis. All values are real. */
@@ -31,21 +32,25 @@ D1 b 0").operatingPoint().iterations; // 5
     return this.system.evaluate(this.system.voltageForm(a, b), xs, Complex.ZERO, this.values).re;
   }
 
-  /** Current through a component, from its first node to its second node, in amperes. */
+  /**
+   * Current through a component, from its first node to its second node, in amperes.
+   * For a transistor: the collector (drain) current, or the current into one
+   * terminal with `"Q1:b"`, `"Q1:base"`, `"M1:g"`…
+   */
   current(id: string): number {
     const xs = this.x.map((v) => new Complex(v));
     return this.system.evaluate(this.system.currentForm(id), xs, Complex.ZERO, this.values).re;
   }
 
   /**
-   * Power absorbed by a component, `V(a,b)·I(a→b)`, in watts. Negative values mean the
-   * component delivers power (sources).
+   * Power absorbed by a component, `V(a,b)·I(a→b)`, in watts (for a transistor, the
+   * sum over its terminals of `V·I`). Negative values mean the component delivers
+   * power (sources).
    */
   power(id: string): number {
-    const c = this.system.circuit.component(id);
-    if (c.type === "coupling") return 0;
-    if (c.type === "opamp") return this.voltage(c.nodes[2]) * this.current(id);
-    return this.voltage(c.nodes[0], c.nodes[1]) * this.current(id);
+    const xs = this.x.map((v) => new Complex(v));
+    const ev = (f: LinearForm) => this.system.evaluate(f, xs, Complex.ZERO, this.values).re;
+    return this.system.powerTerms(id).reduce((acc, t) => acc + ev(t.v) * ev(t.i), 0);
   }
 
   /** Every node voltage referenced to ground (ground included, at 0 V). */
@@ -101,10 +106,11 @@ export class AcSolution {
    * power have a negative real part.
    */
   power(id: string): Complex {
-    const c = this.system.circuit.component(id);
-    if (c.type === "coupling") return Complex.ZERO;
-    const v = c.type === "opamp" ? this.voltage(c.nodes[2]) : this.voltage(c.nodes[0], c.nodes[1]);
-    return v.mul(this.current(id).conj()).mul(0.5);
+    const ev = (f: LinearForm) => this.system.evaluate(f, this.x, this.s, this.values);
+    return this.system
+      .powerTerms(id)
+      .reduce((acc, t) => acc.add(ev(t.v).mul(ev(t.i).conj())), Complex.ZERO)
+      .mul(0.5);
   }
 
   /** Every node voltage phasor referenced to ground. */

@@ -234,7 +234,7 @@ describe("diode netlists", () => {
   it("rejects unknown models, parameters and model types", () => {
     expect(() => parseSpice("V1 a 0 1\nD1 a 0 NOPE")).toThrow(/unknown model "NOPE"/);
     expect(() => parseSpice("V1 a 0 1\nD1 a 0 FOO=1")).toThrow(/unknown diode parameter/);
-    expect(() => parseSpice(".model Q1 NPN(BF=100)\nV1 a 0 1")).toThrow(
+    expect(() => parseSpice(".model J1 NJF(BETA=1m)\nV1 a 0 1")).toThrow(
       expect.objectContaining({ code: "UNSUPPORTED" }),
     );
     expect(() => parseSpice(".model M D\n.model m D\nV1 a 0 1")).toThrow(/duplicate model/);
