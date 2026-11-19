@@ -41,26 +41,27 @@ Exemples : `1k`, `4.7u`, `100nF`, `1e-3`, `2MEG`. La notation européenne est é
 
 ### Éléments
 
-| Ligne                                        | Composant                                                   |
-| -------------------------------------------- | ----------------------------------------------------------- |
-| `Rname n1 n2 value`                          | résistance (Ω)                                              |
-| `Cname n1 n2 value [IC=v]`                   | condensateur (F), tension initiale                          |
-| `Lname n1 n2 value [IC=i]`                   | bobine (H), courant initial                                 |
-| `Vname n+ n- [DC v] [AC mag [phase]] [wave]` | source de tension indépendante                              |
-| `Iname n+ n- [DC i] [AC mag [phase]] [wave]` | source de courant indépendante                              |
-| `Ename n+ n- nc+ nc- gain`                   | source de tension commandée en tension                      |
-| `Gname n+ n- nc+ nc- gm`                     | source de courant commandée en tension                      |
-| `Fname n+ n- Vctrl gain`                     | source de courant commandée en courant                      |
-| `Hname n+ n- Vctrl r`                        | source de tension commandée en courant                      |
-| `Kname L1 L2 k`                              | bobines couplées, `0 < k ≤ 1`                               |
-| `Xname in+ in- out OPAMP [GAIN=a] [GBW=f]`   | amplificateur opérationnel _(extension ElecMap)_            |
-| `Sname n1 n2 ON\|OFF [RON=r] [ROFF=r]`       | interrupteur à état fixe _(extension ElecMap)_              |
-| `Dname anode cathode [model] [area] [K=v…]`  | diode, Zener (voir [diodes](./diodes.md))                   |
-| `.model name D(IS=… N=… RS=… BV=…)`          | carte de modèle de diode                                    |
-| `Qname c b e [sub] [model] [area] [K=v…]`    | transistor bipolaire (voir [transistors](./transistors.md)) |
-| `Mname d g s [b] model [W=w] [L=l] [K=v…]`   | MOSFET, substrat relié à la source s'il est omis            |
-| `.model name NPN                             | PNP(IS=… BF=… VAF=…)`                                       | carte de modèle bipolaire         |
-| `.model name NMOS                            | PMOS(VTO=… KP=… LAMBDA=…)`                                  | carte de modèle MOSFET (niveau 1) |
+| Ligne                                        | Composant                                                                |
+| -------------------------------------------- | ------------------------------------------------------------------------ |
+| `Rname n1 n2 value`                          | résistance (Ω)                                                           |
+| `Cname n1 n2 value [IC=v]`                   | condensateur (F), tension initiale                                       |
+| `Lname n1 n2 value [IC=i]`                   | bobine (H), courant initial                                              |
+| `Vname n+ n- [DC v] [AC mag [phase]] [wave]` | source de tension indépendante                                           |
+| `Iname n+ n- [DC i] [AC mag [phase]] [wave]` | source de courant indépendante                                           |
+| `Ename n+ n- nc+ nc- gain`                   | source de tension commandée en tension                                   |
+| `Gname n+ n- nc+ nc- gm`                     | source de courant commandée en tension                                   |
+| `Fname n+ n- Vctrl gain`                     | source de courant commandée en courant                                   |
+| `Hname n+ n- Vctrl r`                        | source de tension commandée en courant                                   |
+| `Kname L1 L2 k`                              | bobines couplées, `0 < k ≤ 1`                                            |
+| `Xname in+ in- out OPAMP [GAIN=a] [GBW=f]`   | amplificateur opérationnel _(extension ElecMap)_                         |
+| `Xname node… NAME [K=v…]`                    | instance de sous-circuit (voir [plus bas](#sous-circuits-et-paramètres)) |
+| `Sname n1 n2 ON\|OFF [RON=r] [ROFF=r]`       | interrupteur à état fixe _(extension ElecMap)_                           |
+| `Dname anode cathode [model] [area] [K=v…]`  | diode, Zener (voir [diodes](./diodes.md))                                |
+| `.model name D(IS=… N=… RS=… BV=…)`          | carte de modèle de diode                                                 |
+| `Qname c b e [sub] [model] [area] [K=v…]`    | transistor bipolaire (voir [transistors](./transistors.md))              |
+| `Mname d g s [b] model [W=w] [L=l] [K=v…]`   | MOSFET, substrat relié à la source s'il est omis                         |
+| `.model name NPN                             | PNP(IS=… BF=… VAF=…)`                                                    | carte de modèle bipolaire         |
+| `.model name NMOS                            | PMOS(VTO=… KP=… LAMBDA=…)`                                               | carte de modèle MOSFET (niveau 1) |
 
 Un nombre seul après les nœuds d'une source est sa valeur continue (`V1 a 0 5`). Les phases sont en degrés.
 
@@ -71,10 +72,47 @@ Un nombre seul après les nœuds d'une source est sa valeur continue (`V1 a 0 5`
 - `*` en début de ligne commence un commentaire ; `;` et `$` commencent des commentaires en fin de ligne.
 - Une ligne commençant par `+` prolonge la ligne précédente.
 - **Ligne de titre :** en SPICE classique, la première ligne est toujours un titre. ElecMap la détecte automatiquement : la première ligne n'est un titre que si elle ne s'analyse pas comme un élément. Forcez ce comportement avec `compile(src, { spice: { titleLine: true } })`, ou utilisez `.title My circuit`.
-- `.end` arrête l'analyse. Les autres directives (`.ac`, `.tran`, `.op`…) sont ignorées et signalées dans `circuit.parserWarnings`. `.subckt` n'est pas encore pris en charge.
+- `.end` arrête l'analyse. Les autres directives (`.ac`, `.tran`, `.op`…) sont ignorées et signalées dans `circuit.parserWarnings`.
 - Le nœud de masse est `0` ; `gnd` et `GND` en sont des alias. Utilisez `compile(src, { ground: "ref" })` pour choisir un autre nom.
 
-## Format JSON canonique
+### Sous-circuits et paramètres
+
+Un bloc `.subckt` définit un circuit réutilisable ; chaque ligne `X` en place une copie. Les paramètres s'écrivent `{expression}` dans les valeurs des éléments :
+
+```ts
+const c = new ElecMap(`
+* Deux étages Sallen-Key : un passe-bas de Butterworth d'ordre 4
+.param FC=1k R=10k
+.subckt SK in out PARAMS: Q=0.7071
+R1 in a {R}
+R2 a b {R}
+C1 a out {2*Q/(2*pi*FC*R)}
+C2 b 0 {1/(2*Q*2*pi*FC*R)}
+XU b out out OPAMP
+.ends SK
+V1 in 0 AC 1
+X1 in mid SK Q=0.5412
+X2 mid out SK Q=1.3066
+`);
+
+c.components().map((x) => x.id);
+// ["V1", "X1.R1", "X1.R2", "X1.C1", "X1.C2", "X1.XU",
+//        "X2.R1", "X2.R2", "X2.C1", "X2.C2", "X2.XU"]
+c.nodes(); // ["in", "X1.a", "X1.b", "mid", "X2.a", "X2.b", "out"]
+c.components().find((x) => x.id === "X1.C1")?.value; // 1,7227e-8 F = 2·0,5412 / (2π · 1 kHz · 10 kΩ)
+
+const H = c.transferFunction({ input: "V1", output: "out" });
+H.order; // 4
+H.cutoffFrequency(); // 1000,0 Hz
+20 * Math.log10(H.evaluate(2000).abs()); // -24,1 dB  (ordre 4 : -24 dB par octave)
+```
+
+- **Définition :** `.subckt NOM port… [PARAMS:] [K=défaut…]` … `.ends [NOM]`. Les blocs peuvent apparaître n'importe où, avant ou après leur utilisation. Un `.subckt` à l'intérieur d'un autre n'est pas autorisé, mais un sous-circuit peut instancier d'autres sous-circuits (lignes `X` dans le corps).
+- **Instance :** `Xnom nœud… NOM [K=valeur…]`, avec un nœud par port. Les valeurs de l'instance remplacent les valeurs par défaut ; elles sont évaluées dans la portée de l'appelant, donc `R={2*RBASE}` peut utiliser un paramètre global.
+- **Mise à plat :** le circuit est développé à la lecture. Dans `X1`, l'élément `R1` devient `X1.R1` et le nœud interne `a` devient `X1.a` ; les ports sont remplacés par les nœuds de l'instance, et la masse (`0`, `gnd`) reste globale. Les références à d'autres éléments du bloc (sources de commande de `F`/`H`, inductances de `K`) sont renommées de la même façon. Chaque élément peut alors être sondé : `c.voltage("X1.a")`, `c.current("X2.R1")`.
+- **Paramètres :** `.param K=valeur…` définit des paramètres globaux. Les expressions acceptent les nombres avec suffixes SPICE (`1k`, `4k7`), `+ - * /`, `^` ou `**`, les parenthèses, `pi`, `e` et les fonctions `sqrt exp log ln log10 abs sin cos tan atan min max pow`. Les noms sont insensibles à la casse.
+- Les cartes `.model` sont globales, même écrites dans un bloc. `X… OPAMP` reste l'AOP intégré.
+- **Export :** `toSpice()` et `export("netlist")` écrivent le circuit mis à plat (`X1.R1 in X1.a 10k`), qui se relit tel quel : le type d'un élément est donné par la première lettre après le dernier `.`.
 
 ```json
 {

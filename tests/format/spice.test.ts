@@ -149,8 +149,8 @@ S2 a b off
     expect(err("R1 a 0 1k\nR2 a 0 abc").details).toEqual({ line: 2 });
     expect(err("R1 a 0 1k\nR2 a 0 abc").code).toBe("PARSE_ERROR");
     expect(err("J1 d g s 2n3819").message).toMatch(/unknown element/);
-    expect(err("X1 a b c MYSUB").code).toBe("UNSUPPORTED");
-    expect(err(".subckt foo a b").code).toBe("UNSUPPORTED");
+    expect(err("X1 a b c MYSUB").message).toMatch(/unknown subcircuit "MYSUB"/);
+    expect(err(".subckt foo a b").message).toMatch(/missing its .ends/);
     expect(err("V1 a 0 SIN(0 1").message).toMatch(/missing "\)"/);
     expect(err("S1 a b maybe").message).toMatch(/ON or OFF/);
     expect(err("+ 1k").message).toMatch(/continuation/);
