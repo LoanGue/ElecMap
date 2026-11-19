@@ -1,7 +1,10 @@
 import type { ComponentJSON, ComponentType, NodeName } from "../format/types";
 import {
+  bjtCharges,
   bjtCurrents,
   bjtParams,
+  type Charge,
+  diodeCharge,
   diodeCurrent,
   diodeParams,
   limitDiode,
@@ -95,6 +98,22 @@ export interface LoadContext {
   readonly gmin: number;
 }
 
+/**
+ * Charge stored in a junction of a non-linear device. Its current `dQ/dt`
+ * enters the device's own branch rows, so that the branch unknowns are the
+ * total terminal currents.
+ */
+export interface Junction {
+  /** Controlling voltage `v = Σ coef·x[index]` (ground indices are ignored). */
+  voltage: { index: number; coef: number }[];
+  /** Key of the device state holding the (limited) voltage during Newton iterations. */
+  key: string;
+  /** Branch rows the charge enters: the row equation contains `sign·dQ/dt`. */
+  rows: { row: number; sign: number }[];
+  /** Charge and capacitance at the voltage `v`. */
+  charge(v: number): Charge;
+}
+
 /** One terminal of a multi-terminal device, with the current flowing into it. */
 export interface Terminal {
   /** Short name used in `"Q1:b"` (`c`, `b`, `e`, `d`, `g`, `s`…). */
@@ -134,6 +153,8 @@ export interface ComponentModel<T extends ComponentJSON = ComponentJSON> {
   load?(c: T, ctx: LoadContext): void;
   /** Multi-terminal devices: the current into each terminal (they sum to zero). */
   terminals?(c: T, ctx: FormContext): Terminal[];
+  /** Non-linear devices with stored charge: their junctions (empty or absent without one). */
+  junctions?(c: T, ctx: FormContext): Junction[];
 }
 
 const term = (index: number, g: number, c = 0): LinearTerm => ({ index, g, c });
@@ -200,35 +221,18 @@ type BjtModel = ComponentModel<Extract<ComponentJSON, { type: "bjt" }>>;
 type MosfetModel = ComponentModel<Extract<ComponentJSON, { type: "mosfet" }>>;
 
 const bjtTerminals: BjtModel["terminals"] = (c, ctx) => {
-  const [nc, nb, ne] = c.nodes.map((n) => ctx.node(n)) as [number, number, number];
   const k = ctx.branch(c.id);
-  const cje = c.cje ?? 0;
-  const cjc = c.cjc ?? 0;
   return [
-    {
-      name: "c",
-      alias: "collector",
-      node: c.nodes[0],
-      form: form([term(k, 1), term(nc, 0, cjc), term(nb, 0, -cjc)]),
-    },
-    {
-      name: "b",
-      alias: "base",
-      node: c.nodes[1],
-      form: form([term(k + 1, 1), term(nb, 0, cje + cjc), term(ne, 0, -cje), term(nc, 0, -cjc)]),
-    },
-    {
-      name: "e",
-      alias: "emitter",
-      node: c.nodes[2],
-      form: form([term(k, -1), term(k + 1, -1), term(ne, 0, cje), term(nb, 0, -cje)]),
-    },
-  ].map((t) => ({ ...t, form: form(t.form.terms.filter((x) => x.g !== 0 || x.c !== 0)) }));
+    { name: "c", alias: "collector", node: c.nodes[0], form: form([term(k, 1)]) },
+    { name: "b", alias: "base", node: c.nodes[1], form: form([term(k + 1, 1)]) },
+    { name: "e", alias: "emitter", node: c.nodes[2], form: form([term(k, -1), term(k + 1, -1)]) },
+  ];
 };
 
 const bjtModel: BjtModel = {
   // Two branch unknowns: the collector current Ic (collector → emitter) and the
-  // base current Ib (base → emitter); the emitter carries −(Ic + Ib).
+  // base current Ib (base → emitter), junction charges included; the emitter
+  // carries −(Ic + Ib).
   branches: () => 2,
   branchSuffixes: [":b"],
   stamp(c, ctx) {
@@ -236,13 +240,42 @@ const bjtModel: BjtModel = {
     const k = ctx.branch(c.id);
     stampBranchIncidence(ctx, k, nc, ne);
     stampBranchIncidence(ctx, k + 1, nb, ne);
-    if (c.cje) stampAdmittance(ctx, nb, ne, 0, c.cje);
-    if (c.cjc) stampAdmittance(ctx, nb, nc, 0, c.cjc);
   },
   current(c, ctx) {
     return (bjtTerminals(c, ctx) as [Terminal])[0].form;
   },
   terminals: bjtTerminals,
+  junctions(c, ctx) {
+    const p = bjtParams(c);
+    if (p.cje === 0 && p.cjc === 0 && p.tf === 0 && p.tr === 0) return [];
+    const [nc, nb, ne] = c.nodes.map((n) => ctx.node(n)) as [number, number, number];
+    const k = ctx.branch(c.id);
+    const s = p.sign;
+    // Ic row: Ic = ic − dQbc/dt; Ib row: Ib = ib + dQbe/dt + dQbc/dt (NPN-normalised charges).
+    return [
+      {
+        voltage: [
+          { index: nb, coef: s },
+          { index: ne, coef: -s },
+        ],
+        key: "vbe",
+        rows: [{ row: k + 1, sign: -s }],
+        charge: (v) => bjtCharges(v, 0, p).be,
+      },
+      {
+        voltage: [
+          { index: nb, coef: s },
+          { index: nc, coef: -s },
+        ],
+        key: "vbc",
+        rows: [
+          { row: k, sign: s },
+          { row: k + 1, sign: -s },
+        ],
+        charge: (v) => bjtCharges(0, v, p).bc,
+      },
+    ];
+  },
   load(c, ctx) {
     const p = bjtParams(c);
     const [nc, nb, ne] = c.nodes.map((n) => ctx.node(n)) as [number, number, number];
@@ -543,18 +576,33 @@ export const MODELS: ModelMap = {
   },
 
   diode: {
-    // Branch current I (anode → cathode), equation I = Id(Va − Vk − rs·I), linearised
-    // around Vj₀: (1 + gd·rs)·I − gd·Va + gd·Vk = Id(Vj₀) − gd·Vj₀.
+    // Branch current I (anode → cathode), equation I = Id(Vj) + dQ(Vj)/dt with
+    // Vj = Va − Vk − rs·I; the current part linearised around Vj₀:
+    // (1 + gd·rs)·I − gd·Va + gd·Vk = Id(Vj₀) − gd·Vj₀.
     branches: () => 1,
     stamp(c, ctx) {
       const [a, k, b] = [ctx.node(c.nodes[0]), ctx.node(c.nodes[1]), ctx.branch(c.id)];
       stampBranchIncidence(ctx, b, a, k);
-      if (c.cjo) stampAdmittance(ctx, a, k, 0, c.cjo);
     },
     current(c, ctx) {
+      return branchForm(ctx.branch(c.id));
+    },
+    junctions(c, ctx) {
+      const p = diodeParams(c);
+      if (p.cjo === 0 && p.tt === 0) return [];
       const [a, k, b] = [ctx.node(c.nodes[0]), ctx.node(c.nodes[1]), ctx.branch(c.id)];
-      const cj = c.cjo ?? 0;
-      return form(cj ? [term(b, 1), term(a, 0, cj), term(k, 0, -cj)] : [term(b, 1)]);
+      return [
+        {
+          voltage: [
+            { index: a, coef: 1 },
+            { index: k, coef: -1 },
+            { index: b, coef: -p.rs },
+          ],
+          key: "vj",
+          rows: [{ row: b, sign: -1 }],
+          charge: (v) => diodeCharge(v, p),
+        },
+      ];
     },
     load(c, ctx) {
       const p = diodeParams(c);

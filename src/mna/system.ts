@@ -4,7 +4,14 @@ import type { ComponentJSON, NodeName } from "../format/types";
 import { Complex } from "../math/complex";
 import { Polynomial } from "../math/polynomial";
 import { modelOf } from "./models";
-import type { FormContext, LinearForm, LoadContext, StampContext, Terminal } from "./models";
+import type {
+  FormContext,
+  Junction,
+  LinearForm,
+  LoadContext,
+  StampContext,
+  Terminal,
+} from "./models";
 
 /** Value assigned to each independent source for a given analysis. */
 export type SourceValues = (component: ComponentJSON) => number | Complex;
@@ -22,6 +29,9 @@ export type SourceValues = (component: ComponentJSON) => number | Complex;
  * Non-linear devices (diodes…) leave their equation rows empty in `G`: DC and
  * transient analyses fill them at each Newton iteration, and small-signal
  * analyses use {@link MnaSystem.smallSignal}, linearised around an operating point.
+ * Their junction charges are non-linear too: `C` only holds their capacitances
+ * in a small-signal system, and transient analysis integrates the charges
+ * themselves ({@link MnaSystem.charges}).
  */
 export class MnaSystem {
   /** Circuit this system was built from. */
@@ -43,6 +53,8 @@ export class MnaSystem {
   readonly bias: readonly number[] | undefined;
 
   private readonly branches: ReadonlyMap<string, number>;
+  /** Junction charges of the non-linear devices, with the id of their device. */
+  private readonly junctions: readonly (Junction & { id: string })[];
 
   /**
    * @param bias operating point (MNA unknowns) around which the non-linear devices
@@ -81,6 +93,9 @@ export class MnaSystem {
     };
     for (const c of circuit.components) modelOf(c).stamp(c, ctx);
     this.nonlinear = circuit.components.filter((c) => modelOf(c).load !== undefined);
+    this.junctions = this.nonlinear.flatMap((c) =>
+      (modelOf(c).junctions?.(c, ctx) ?? []).map((j) => ({ ...j, id: c.id })),
+    );
     this.bias = bias;
     if (bias) {
       if (bias.length !== this.size) {
@@ -90,6 +105,13 @@ export class MnaSystem {
         );
       }
       this.load(G, new Array<number>(this.size).fill(0), bias, undefined, 1e-12);
+      // Junction capacitances at the operating point.
+      for (const j of this.junctions) {
+        const { c } = j.charge(junctionVoltage(j, bias));
+        for (const { row, sign } of j.rows) {
+          for (const { index, coef } of j.voltage) add(C)(row, index, sign * c * coef);
+        }
+      }
     }
     this.G = G;
     this.C = C;
@@ -113,6 +135,9 @@ export class MnaSystem {
    * Adds the Newton linearisation of every non-linear device at `x` to `matrix`
    * and `rhs` (in place). Returns true if a device limited its voltage step.
    * `states` (one record per device id) enables step limiting.
+   *
+   * With `charge = a`, the junction charges are added as `a·Q(x)` (the
+   * companion term of an integration step `a·(q − q_prev)`), linearised too.
    */
   load(
     matrix: number[][],
@@ -121,6 +146,7 @@ export class MnaSystem {
     states: Map<string, Record<string, number>> | undefined,
     gmin: number,
     initial = false,
+    charge?: number,
   ): boolean {
     let limited = false;
     for (const c of this.nonlinear) {
@@ -147,7 +173,42 @@ export class MnaSystem {
       };
       modelOf(c).load?.(c, ctx);
     }
+    if (charge !== undefined) {
+      for (const j of this.junctions) {
+        // The voltage the device was linearised at (limited), else the iterate's.
+        const v = states?.get(j.id)?.[j.key] ?? junctionVoltage(j, x);
+        const { q, c } = j.charge(v);
+        for (const { row, sign } of j.rows) {
+          if (row < 0) continue;
+          for (const { index, coef } of j.voltage) {
+            if (index >= 0) {
+              const r = matrix[row] as number[];
+              r[index] = (r[index] as number) + charge * sign * c * coef;
+            }
+          }
+          rhs[row] = (rhs[row] as number) - charge * sign * (q - c * v);
+        }
+      }
+    }
     return limited;
+  }
+
+  /** True if some device stores a junction charge (bias-dependent capacitance). */
+  get hasCharges(): boolean {
+    return this.junctions.length > 0;
+  }
+
+  /**
+   * Junction charges at `x`, as a vector over the MNA rows (`sign·Q` in each
+   * row a junction enters). Transient analysis adds it to `C·x`.
+   */
+  charges(x: readonly number[]): number[] {
+    const out = new Array<number>(this.size).fill(0);
+    for (const j of this.junctions) {
+      const { q } = j.charge(junctionVoltage(j, x));
+      for (const { row, sign } of j.rows) if (row >= 0) out[row] = (out[row] as number) + sign * q;
+    }
+    return out;
   }
 
   private requireLinear(): void {
@@ -348,3 +409,10 @@ export const singleSource =
   (id: string, value: number | Complex = 1): SourceValues =>
   (c) =>
     c.id === id ? value : 0;
+
+/** Controlling voltage of a junction at `x`. */
+function junctionVoltage(j: Junction, x: readonly number[]): number {
+  let v = 0;
+  for (const { index, coef } of j.voltage) if (index >= 0) v += coef * (x[index] as number);
+  return v;
+}

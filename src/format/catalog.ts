@@ -1,7 +1,7 @@
 import type { ComponentType } from "./types";
 
 /** Constraint applied to a numeric field. */
-export type NumberConstraint = "any" | "positive" | "nonNegative" | "coupling";
+export type NumberConstraint = "any" | "positive" | "nonNegative" | "coupling" | "fraction";
 
 /** Static description of a component type (used for validation, docs and tooling). */
 export interface ComponentSpec {
@@ -128,6 +128,10 @@ export const COMPONENT_CATALOG: Readonly<Record<ComponentType, ComponentSpec>> =
       ibv: [false, "positive"],
       nbv: [false, "positive"],
       cjo: [false, "nonNegative"],
+      vj: [false, "positive"],
+      m: [false, "nonNegative"],
+      tt: [false, "nonNegative"],
+      fc: [false, "fraction"],
     },
   },
   bjt: {
@@ -144,7 +148,14 @@ export const COMPONENT_CATALOG: Readonly<Record<ComponentType, ComponentSpec>> =
       vaf: [false, "positive"],
       var: [false, "positive"],
       cje: [false, "nonNegative"],
+      vje: [false, "positive"],
+      mje: [false, "nonNegative"],
       cjc: [false, "nonNegative"],
+      vjc: [false, "positive"],
+      mjc: [false, "nonNegative"],
+      tf: [false, "nonNegative"],
+      tr: [false, "nonNegative"],
+      fc: [false, "fraction"],
     },
   },
   mosfet: {

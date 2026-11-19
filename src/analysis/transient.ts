@@ -140,20 +140,27 @@ export function transient(system: MnaSystem, options: TransientOptions): Transie
 
   const G = system.G;
   const C = system.C;
-  const mulC = (x: readonly number[]) =>
-    C.map((row) => row.reduce((acc, c, j) => (c === 0 ? acc : acc + c * (x[j] as number)), 0));
+  // Stored charge q(x) = C·x + junction charges of the devices.
+  const mulC = (x: readonly number[]) => {
+    const q = C.map((row) =>
+      row.reduce((acc, c, j) => (c === 0 ? acc : acc + c * (x[j] as number)), 0),
+    );
+    if (system.hasCharges) system.charges(x).forEach((v, i) => (q[i] = (q[i] as number) + v));
+    return q;
+  };
   const mulG = (x: readonly number[]) =>
     G.map((row) => row.reduce((acc, g, j) => (g === 0 ? acc : acc + g * (x[j] as number)), 0));
   // Linear solver of a step matrix, or Newton-Raphson when the circuit has devices.
   const states: DeviceStates = new Map();
   type Solve = (b: number[], guess: readonly number[], t: number) => number[];
-  const solver = (A: number[][], tolerance?: number): Solve => {
+  // `a` is the coefficient of q(x) in the step equation (for the junction charges).
+  const solver = (A: number[][], a: number, tolerance?: number): Solve => {
     if (system.linear) {
       const lu = new RealLU(A, tolerance);
       return (b) => lu.solve(b);
     }
     return (b, guess, t) => {
-      const r = newtonSolve(system, A, b, guess, states);
+      const r = newtonSolve(system, A, b, guess, states, {}, false, a);
       if (!r) {
         throw new ElecMapError(
           "NO_CONVERGENCE",
@@ -191,7 +198,7 @@ export function transient(system: MnaSystem, options: TransientOptions): Transie
     q0 = initialCharge(system);
     // Consistent x(0+): backward Euler with a vanishing step enforces C·x = q0 and the algebraic equations.
     const eps = h * 1e-6;
-    const solve0 = solver(combine(1 / eps, 1), 0);
+    const solve0 = solver(combine(1 / eps, 1), 1 / eps, 0);
     const b0 = rhsAt(0);
     xs.push(
       solve0(
@@ -204,7 +211,7 @@ export function transient(system: MnaSystem, options: TransientOptions): Transie
   }
 
   // First step: backward Euler. C(x1 − x0)/h + G x1 = b1.
-  const euler = solver(combine(1 / h, 1));
+  const euler = solver(combine(1 / h, 1), 1 / h);
   const qs: number[][] = [q0];
   const t1 = Math.min(h, tStop);
   {
@@ -221,8 +228,8 @@ export function transient(system: MnaSystem, options: TransientOptions): Transie
 
   let step: Solve;
   if (method === "euler") step = euler;
-  else if (method === "gear2") step = solver(combine(3 / (2 * h), 1));
-  else step = solver(combine(1 / h, 0.5));
+  else if (method === "gear2") step = solver(combine(3 / (2 * h), 1), 3 / (2 * h));
+  else step = solver(combine(1 / h, 0.5), 1 / h);
 
   for (let k = 2; k <= steps; k++) {
     const t = Math.min(k * h, tStop);

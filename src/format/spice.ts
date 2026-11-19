@@ -302,6 +302,10 @@ const FAMILY_PARAMS: Record<Family, readonly (readonly [string, string])[]> = {
     ["ibv", "IBV"],
     ["nbv", "NBV"],
     ["cjo", "CJO"],
+    ["vj", "VJ"],
+    ["m", "M"],
+    ["tt", "TT"],
+    ["fc", "FC"],
   ],
   bjt: [
     ["is", "IS"],
@@ -312,7 +316,14 @@ const FAMILY_PARAMS: Record<Family, readonly (readonly [string, string])[]> = {
     ["vaf", "VAF"],
     ["var", "VAR"],
     ["cje", "CJE"],
+    ["vje", "VJE"],
+    ["mje", "MJE"],
     ["cjc", "CJC"],
+    ["vjc", "VJC"],
+    ["mjc", "MJC"],
+    ["tf", "TF"],
+    ["tr", "TR"],
+    ["fc", "FC"],
   ],
   mosfet: [
     ["vto", "VTO"],
@@ -340,7 +351,19 @@ const FAMILY_NAMES: Record<Family, string> = {
   mosfet: "MOSFET",
 };
 
-const MODEL_ALIASES: Record<string, string> = { CJ0: "CJO", VA: "VAF", VB: "VAR", VT0: "VTO" };
+const MODEL_ALIASES: Record<string, string> = {
+  CJ0: "CJO",
+  CJ: "CJO",
+  PB: "VJ",
+  MJ: "M",
+  PE: "VJE",
+  ME: "MJE",
+  PC: "VJC",
+  MC: "MJC",
+  VA: "VAF",
+  VB: "VAR",
+  VT0: "VTO",
+};
 
 /**
  * A `.model` card as written by {@link toSpice}: its SPICE type (`D`, `NPN`,

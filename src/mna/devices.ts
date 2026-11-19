@@ -32,6 +32,10 @@ export interface DiodeParams {
   ibv: number;
   nbv: number;
   cjo: number;
+  vj: number;
+  m: number;
+  tt: number;
+  fc: number;
   /** `n·Vt` (V). */
   nvt: number;
   /** Critical voltage above which steps are limited (V). */
@@ -51,6 +55,10 @@ export function diodeParams(c: DiodeJSON): DiodeParams {
     ibv: c.ibv ?? 1e-3,
     nbv: c.nbv ?? n,
     cjo: c.cjo ?? 0,
+    vj: c.vj ?? 1,
+    m: c.m ?? 0.5,
+    tt: c.tt ?? 0,
+    fc: c.fc ?? 0.5,
     nvt,
     vcrit: nvt * Math.log(nvt / (Math.SQRT2 * is)),
   };
@@ -68,6 +76,43 @@ export function diodeCurrent(vj: number, p: DiodeParams): { i: number; g: number
     g += (p.ibv * r.slope) / vt;
   }
   return { i, g };
+}
+
+/** Stored charge `Q(v)` (C) of a junction and its capacitance `dQ/dv` (F). */
+export interface Charge {
+  q: number;
+  c: number;
+}
+
+/**
+ * Depletion charge of a junction (SPICE): `C(v) = cj0 / (1 − v/vj)^m` below
+ * `fc·vj`, continued linearly above it so that it stays finite in forward bias.
+ * `Q(0) = 0`.
+ */
+export function depletionCharge(v: number, cj0: number, vj: number, m: number, fc: number): Charge {
+  if (cj0 === 0) return { q: 0, c: 0 };
+  const vfc = fc * vj;
+  // ∫₀^v (1 − u/vj)^(−m) du, with the m = 1 limit.
+  const integral = (u: number) =>
+    m === 1 ? -vj * Math.log(1 - u / vj) : (vj * (1 - Math.pow(1 - u / vj, 1 - m))) / (1 - m);
+  if (v < vfc) {
+    return { q: cj0 * integral(v), c: cj0 * Math.pow(1 - v / vj, -m) };
+  }
+  const f2 = Math.pow(1 - fc, 1 + m);
+  const f3 = 1 - fc * (1 + m);
+  const dv = v - vfc;
+  return {
+    q: cj0 * integral(vfc) + (cj0 / f2) * (f3 * dv + (m / (2 * vj)) * (v * v - vfc * vfc)),
+    c: (cj0 / f2) * (f3 + (m * v) / vj),
+  };
+}
+
+/** Charge of a diode junction: depletion (`cjo`, `vj`, `m`) plus diffusion `tt·I`. */
+export function diodeCharge(vj: number, p: DiodeParams): Charge {
+  const d = depletionCharge(vj, p.cjo, p.vj, p.m, p.fc);
+  if (p.tt === 0) return d;
+  const i = diodeCurrent(vj, p);
+  return { q: d.q + p.tt * i.i, c: d.c + p.tt * i.g };
 }
 
 /**
@@ -121,7 +166,14 @@ export interface BjtParams {
   ivaf: number;
   ivar: number;
   cje: number;
+  vje: number;
+  mje: number;
   cjc: number;
+  vjc: number;
+  mjc: number;
+  tf: number;
+  tr: number;
+  fc: number;
   /** Critical voltages of the base-emitter and base-collector junctions (V). */
   vcritBe: number;
   vcritBc: number;
@@ -142,7 +194,14 @@ export function bjtParams(c: BjtJSON): BjtParams {
     ivaf: c.vaf ? 1 / c.vaf : 0,
     ivar: c.var ? 1 / c.var : 0,
     cje: c.cje ?? 0,
+    vje: c.vje ?? 0.75,
+    mje: c.mje ?? 0.33,
     cjc: c.cjc ?? 0,
+    vjc: c.vjc ?? 0.75,
+    mjc: c.mjc ?? 0.33,
+    tf: c.tf ?? 0,
+    tr: c.tr ?? 0,
+    fc: c.fc ?? 0.5,
     vcritBe: vtf * Math.log(vtf / (Math.SQRT2 * is)),
     vcritBc: vtr * Math.log(vtr / (Math.SQRT2 * is)),
   };
@@ -181,6 +240,26 @@ export function bjtCurrents(vbe: number, vbc: number, p: BjtParams, gmin = 0): B
     dibBe: gbe / p.bf + gmin,
     dibBc: gbc / p.br + gmin,
   };
+}
+
+/**
+ * Charges of the base-emitter and base-collector junctions of an
+ * NPN-normalised transistor: depletion plus diffusion `tf·Ibe`, `tr·Ibc`.
+ */
+export function bjtCharges(vbe: number, vbc: number, p: BjtParams): { be: Charge; bc: Charge } {
+  const be = depletionCharge(vbe, p.cje, p.vje, p.mje, p.fc);
+  const bc = depletionCharge(vbc, p.cjc, p.vjc, p.mjc, p.fc);
+  if (p.tf !== 0) {
+    const f = safeExp(vbe / p.vtf);
+    be.q += p.tf * p.is * (f.value - 1);
+    be.c += (p.tf * p.is * f.slope) / p.vtf;
+  }
+  if (p.tr !== 0) {
+    const f = safeExp(vbc / p.vtr);
+    bc.q += p.tr * p.is * (f.value - 1);
+    bc.c += (p.tr * p.is * f.slope) / p.vtr;
+  }
+  return { be, bc };
 }
 
 // ------------------------------------------------------------------- MOSFET

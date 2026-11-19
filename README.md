@@ -219,7 +219,7 @@ Supported components: R, C, L, coupled inductors (K), independent V/I sources, t
 
 ## Limitations
 
-- Non-linear components: diodes, BJTs (Ebers-Moll with Early effect) and level-1 MOSFETs; their capacitances are constant. Switches have a fixed state.
+- Non-linear components: diodes, BJTs (Ebers-Moll with Early effect) and level-1 MOSFETs. Diode and BJT junction capacitances depend on the bias and include transit time; MOSFET capacitances are constant. Switches have a fixed state.
 - `.model` supports `D`, `NPN`, `PNP`, `NMOS`, `PMOS` (level 1); `.subckt` blocks are flattened when read (the JSON and netlist exports are flat); no `.include`.
 - Literal transfer functions are linear-only: a circuit with a diode gives its numeric, linearised transfer function only.
 - Literal transfer functions remove common monomial factors only; a pole/zero cancellation that holds for every component value may leave the expression one order higher than the numeric one. They are limited to about 30 unknowns (use `symbols` to keep only some components literal).

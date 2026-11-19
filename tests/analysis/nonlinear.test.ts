@@ -205,7 +205,7 @@ describe("transient with diodes", () => {
 describe("diode netlists", () => {
   it("parses models anywhere, case-insensitively, with overrides and area", () => {
     const { circuit, warnings } = parseSpice(
-      "* rectifier\nD1 a 0 dmod 2 RS=1\nV1 a 0 1\n.MODEL DMOD D (IS=1n N=2 RS=4 BV=10 TT=5n)\n.end",
+      "* rectifier\nD1 a 0 dmod 2 RS=1\nV1 a 0 1\n.MODEL DMOD D (IS=1n N=2 RS=4 BV=10 TT=5n XTI=3)\n.end",
     );
     expect(circuit.components[0]).toEqual({
       id: "D1",
@@ -217,8 +217,9 @@ describe("diode netlists", () => {
       rs: 0.5,
       bv: 10,
       ibv: 2e-3,
+      tt: 5e-9,
     });
-    expect(warnings).toEqual(["Line 4: model DMOD: parameter TT ignored"]);
+    expect(warnings).toEqual(["Line 4: model DMOD: parameter XTI ignored"]);
   });
 
   it("accepts model-less diodes, with inline parameters", () => {

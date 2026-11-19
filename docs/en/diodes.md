@@ -53,21 +53,25 @@ D2 a 0 D1N4148 RS=2
 
 ### Parameters
 
-| SPICE | JSON  | Meaning                                 | Default |
-| ----- | ----- | --------------------------------------- | ------- |
-| `IS`  | `is`  | saturation current (A)                  | `1e-14` |
-| `N`   | `n`   | emission coefficient                    | `1`     |
-| `RS`  | `rs`  | series resistance (Ω)                   | `0`     |
-| `BV`  | `bv`  | reverse breakdown voltage (V), Zener    | none    |
-| `IBV` | `ibv` | current at `−BV` (A)                    | `1e-3`  |
-| `NBV` | `nbv` | emission coefficient of the breakdown   | `N`     |
-| `CJO` | `cjo` | junction capacitance (F), held constant | `0`     |
+| SPICE | JSON  | Meaning                               | Default |
+| ----- | ----- | ------------------------------------- | ------- |
+| `IS`  | `is`  | saturation current (A)                | `1e-14` |
+| `N`   | `n`   | emission coefficient                  | `1`     |
+| `RS`  | `rs`  | series resistance (Ω)                 | `0`     |
+| `BV`  | `bv`  | reverse breakdown voltage (V), Zener  | none    |
+| `IBV` | `ibv` | current at `−BV` (A)                  | `1e-3`  |
+| `NBV` | `nbv` | emission coefficient of the breakdown | `N`     |
+| `CJO` | `cjo` | zero-bias junction capacitance (F)    | `0`     |
+| `VJ`  | `vj`  | junction potential (V)                | `1`     |
+| `M`   | `m`   | grading coefficient                   | `0.5`   |
+| `TT`  | `tt`  | transit time (s)                      | `0`     |
+| `FC`  | `fc`  | forward-bias capacitance coefficient  | `0.5`   |
 
 The current is the Shockley law, plus an exponential breakdown when `BV` is set:
 
 <div class="em-math">I = I_S \left(e^{V_j / N V_T} - 1\right) - I_{BV}\, e^{-(V_j + BV) / N_{BV} V_T}, \qquad V_j = V_{AK} - R_S I, \quad V_T = 25.865\ \text{mV}</div>
 
-Other SPICE parameters (`TT`, `M`, `VJ`…) are accepted and reported in `warnings`. An area factor after the model name (`D1 a 0 DMOD 2`) multiplies `IS`, `IBV`, `CJO` and divides `RS`.
+`CJ0`/`CJ`, `PB` and `MJ` are accepted for `CJO`, `VJ` and `M`. Other SPICE parameters (`XTI`, `EG`, `KF`…) are accepted and reported in `warnings`. An area factor after the model name (`D1 a 0 DMOD 2`) multiplies `IS`, `IBV`, `CJO` and divides `RS`.
 
 In JSON, the parameters are fields of the component; the model name is kept for the round trip to SPICE:
 
@@ -121,7 +125,7 @@ th.resistance; // 2.6916 Ω
 
 ## Small-signal analysis
 
-Small-signal analyses (`ac`, `transferFunction`, `impedance`, `thevenin`…) first compute the DC operating point, then replace every diode by its tangent: a resistance `r_d = N·V_T / I + R_S` in parallel with `CJO`.
+Small-signal analyses (`ac`, `transferFunction`, `impedance`, `thevenin`…) first compute the DC operating point, then replace every diode by its tangent: `R_S` in series with the junction, a resistance `r_d = N·V_T / I` in parallel with its capacitance at the operating point (see [junction capacitance](#junction-capacitance-and-transit-time)).
 
 ```ts
 const amp = new ElecMap(`
@@ -131,11 +135,13 @@ D1 a 0 D1N4148
 .model D1N4148 D(IS=2.52n N=1.752 RS=0.568 CJO=4p)
 `);
 
-amp.impedance("a").dcGain(); // 10.874 Ω   = r_d ∥ R1
+amp.impedance("a").dcGain(); // 10.874 Ω   = (r_d + R_S) ∥ R1
 
 const H = amp.transferFunction({ input: "V1", output: "a" });
-H.toLatex(); // "\frac{0.01087}{1 + \left(4.349 \times 10^{-11}\right) s}"
-H.cutoffFrequency(); // 3659200000 Hz, r_d ∥ R1 with CJO
+H.toLatex();
+// "\frac{0.01087 + \left(3.813 \times 10^{-14}\right) s}{1 + \left(6.716 \times 10^{-11}\right) s}"
+H.poles()[0].abs() / (2 * Math.PI); // 2369600000 Hz   the junction capacitance
+H.zeros()[0].abs() / (2 * Math.PI); // 45389000000 Hz  R_S in series with it
 ```
 
 The linearised system is available as `circuit.smallSignal`, an `MnaSystem` you can pass to the low-level functions. For a linear circuit it is `circuit.system` itself.
@@ -170,6 +176,69 @@ Math.max(...tr.current("D1")); // 0.33007 A  charging current peaks
 <figcaption>The capacitor charges on each positive peak, then discharges into R1: about 1.5 V of ripple</figcaption>
 </figure>
 
+## Junction capacitance and transit time
+
+A junction stores charge, and the charge depends on the voltage. Two parts add up:
+
+- the **depletion** charge, set by `CJO`, `VJ` and `M`. Its capacitance falls as the reverse voltage grows. Above `FC·VJ` in forward bias it is continued by a straight line, so it stays finite;
+- the **diffusion** charge `TT·I`, carried by the forward current. Its capacitance `TT·g_d` dominates in conduction.
+
+<div class="em-math">C_j(V) = \frac{C_{JO}}{\left(1 - V / V_J\right)^{M}} \quad (V < FC \cdot V_J), \qquad C_d = TT \cdot \frac{dI}{dV}</div>
+
+Small-signal analyses use the capacitance at the operating point; a transient integrates the charge itself, so the capacitance follows the voltage at every step. With `M = 0` the capacitance is constant and equal to `CJO`.
+
+### A varactor
+
+A reverse-biased diode is a capacitor tuned by its voltage. Here it is the capacitor of an RC low-pass filter, and the reverse voltage moves the cut-off frequency:
+
+```ts
+const filter = new ElecMap(`
+V1 in 0 DC 0 AC 1
+R1 in a 10k
+D1 0 a DVAR
+.model DVAR D(CJO=30p VJ=0.7 M=0.5)
+`);
+
+for (const vr of [0, 2, 5, 10]) {
+  filter.setValue("V1", vr, "dc").transferFunction("a").cutoffFrequency();
+}
+// 0 V:  530.52 kHz   C = 30 pF
+// 2 V:  1.0419 MHz   C = 15.275 pF   = 30p / √(1 + 2/0.7)
+// 5 V:  1.5139 MHz   C = 10.513 pF
+// 10 V: 2.0742 MHz   C = 7.6732 pF
+```
+
+<figure class="em-figure">
+{@include ./figures/varactor.svg}
+<figcaption>The capacitance follows CJO / √(1 + V/VJ), so the cut-off frequency rises with the reverse voltage</figcaption>
+</figure>
+
+### Reverse recovery
+
+A conducting diode holds the diffusion charge `TT·I_F`. When the source reverses, that charge has to leave before the diode can block: for a **storage time** the diode conducts in reverse, limited only by the resistor.
+
+```ts
+const recovery = (tt: string) =>
+  new ElecMap(`
+V1 in 0 PULSE(5 -5 100n 1n 1n 1u 2u)
+R1 in a 1k
+D1 a 0 DS
+.model DS D(IS=1e-14 TT=${tt})
+`).transient({ tStop: 250e-9, tStep: 0.5e-9 });
+
+const tr = recovery("50n");
+tr.current("D1")[180]; // 0.0043071 A    I_F at 90 ns
+tr.current("D1")[240]; // -0.0056572 A   I_R at 120 ns ≈ (−5 − 0.66 V) / 1 kΩ
+// V(a) crosses 0 at 129 ns: a storage time of 28 ns
+// theory: TT·ln(1 + I_F/I_R) = 28.3 ns
+recovery("0").current("D1")[240]; // -5.01e-12 A  blocks at once
+```
+
+<figure class="em-figure">
+{@include ./figures/reverse-recovery.svg}
+<figcaption>With a 50 ns transit time the diode keeps conducting in reverse for 28 ns after the edge</figcaption>
+</figure>
+
 ## Convergence
 
 Newton-Raphson starts each junction at its critical voltage and limits each junction's voltage step like SPICE (`pnjlim`), so it converges on most circuits without help. If plain Newton fails, ElecMap retries with **gmin stepping** (a conductance to ground decreasing from 10 mS to 0), then with **source stepping** (sources ramped from 0 to their value). The options set the tolerances:
@@ -198,7 +267,7 @@ In a transient, a step that does not converge throws `NO_CONVERGENCE` with `deta
 
 ## Limitations
 
-- The junction capacitance `CJO` is constant: it does not depend on the bias, and transit time (`TT`) is ignored.
+- Temperature effects (`XTI`, `EG`) and noise are not modelled.
 - Literal transfer functions are not available for non-linear circuits:
 
 ```ts
