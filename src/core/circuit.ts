@@ -1,5 +1,6 @@
 import { ElecMapError } from "./errors";
-import { parseSpice } from "../format/spice";
+import { readCircuit } from "../format/exchange";
+import type { CircuitFormat } from "../format/exchange";
 import type { SpiceParseOptions } from "../format/spice";
 import { toSpice } from "../format/spice";
 import type { CircuitJSON, ComponentJSON, NodeName } from "../format/types";
@@ -13,9 +14,14 @@ export interface CompileOptions {
   ground?: NodeName;
   /** SPICE parser options (only used for netlist input). */
   spice?: Omit<SpiceParseOptions, "ground">;
+  /**
+   * Format of a text input. By default it is detected: text starting with `{`
+   * is JSON, a single token without whitespace is base64, anything else is a netlist.
+   */
+  format?: CircuitFormat;
 }
 
-/** Accepted circuit inputs: SPICE netlist text, JSON text, or a {@link CircuitJSON} object. */
+/** Accepted circuit inputs: SPICE netlist text, base64 text, JSON text, or a {@link CircuitJSON} object. */
 export type CircuitInput = string | CircuitJSON;
 
 function deepCopy<T>(value: T): T {
@@ -150,30 +156,17 @@ export class CompiledCircuit {
 /**
  * Parses (if needed), validates and indexes a circuit.
  *
- * - A string starting with `{` is parsed as JSON, any other string as a SPICE netlist.
+ * - A string is read in `options.format`; by default, text starting with `{` is
+ *   JSON, a single token without whitespace is base64, anything else is a netlist.
  * - An object is taken as a {@link CircuitJSON} document.
  *
  * @throws {@link ElecMapError} `PARSE_ERROR`, `UNSUPPORTED`, or `INVALID_CIRCUIT`
  *   (with `details.issues: ValidationIssue[]`).
  */
 export function compile(input: CircuitInput, options: CompileOptions = {}): CompiledCircuit {
-  let doc: unknown;
-  let parserWarnings: string[] = [];
-  if (typeof input === "string") {
-    if (input.trimStart().startsWith("{")) {
-      try {
-        doc = JSON.parse(input);
-      } catch (e) {
-        throw new ElecMapError("PARSE_ERROR", `Invalid JSON: ${(e as Error).message}`);
-      }
-    } else {
-      const parsed = parseSpice(input, { ...options.spice });
-      doc = parsed.circuit;
-      parserWarnings = parsed.warnings;
-    }
-  } else {
-    doc = input;
-  }
+  const { doc, warnings: parserWarnings } = readCircuit(input, options.format, {
+    ...options.spice,
+  });
 
   const docGround =
     typeof doc === "object" && doc !== null && typeof (doc as CircuitJSON).ground === "string"

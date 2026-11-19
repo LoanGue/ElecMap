@@ -35,16 +35,16 @@ c.toSVG(); // standalone <svg> schematic
 
 ## Features
 
-| Area           | What you get                                                                                                    |
-| -------------- | --------------------------------------------------------------------------------------------------------------- |
-| Input          | SPICE netlists (engineering suffixes, `.title`, waveforms), canonical JSON, round-trip `toJSON()` / `toSpice()` |
-| DC / AC        | Operating point, phasors at any frequency, log sweeps, voltage between any two nodes, current in any branch     |
-| Transfer funcs | Exact H(s), LaTeX, Bode, poles/zeros, stability, filter type, cutoff, Q, ω₀, ζ, response to sines               |
-| Literal H(s)   | Transfer functions and impedances in terms of component symbols (`R_{1}`, `C_{2}`…), with partial substitution  |
-| Equivalents    | Equivalent R, L, C and Z(s), input/output impedance, Thévenin / Norton, maximum power transfer                  |
-| Power          | DC and complex AC power per component                                                                           |
-| Time domain    | Exact step/impulse/arbitrary-input responses of H(s); transient simulation (trapezoidal, Gear-2, Euler)         |
-| Schematics     | Automatic SVG layout and routing, IEC or ANSI symbols, light/dark themes, interactive `data-*` attributes       |
+| Area           | What you get                                                                                                                                                        |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Input          | SPICE netlists (engineering suffixes, `.title`, waveforms), canonical JSON, round-trip `toJSON()` / `toSpice()`, `export("base64")` to share a circuit as one token |
+| DC / AC        | Operating point, phasors at any frequency, log sweeps, voltage between any two nodes, current in any branch                                                         |
+| Transfer funcs | Exact H(s), LaTeX, Bode, poles/zeros, stability, filter type, cutoff, Q, ω₀, ζ, response to sines                                                                   |
+| Literal H(s)   | Transfer functions and impedances in terms of component symbols (`R_{1}`, `C_{2}`…), with partial substitution                                                      |
+| Equivalents    | Equivalent R, L, C and Z(s), input/output impedance, Thévenin / Norton, maximum power transfer                                                                      |
+| Power          | DC and complex AC power per component                                                                                                                               |
+| Time domain    | Exact step/impulse/arbitrary-input responses of H(s); transient simulation (trapezoidal, Gear-2, Euler)                                                             |
+| Schematics     | Automatic SVG layout and routing, IEC or ANSI symbols, light/dark themes, interactive `data-*` attributes                                                           |
 
 Components: R, L, C, coupled inductors / transformers, independent V and I sources (DC, AC, sine, pulse, PWL, exp), the four controlled sources (E, F, G, H), op-amps (ideal, finite gain, single-pole GBW), fixed-state switches, diodes / Zener diodes, bipolar transistors (Ebers-Moll) and MOSFETs (level 1) with SPICE `.model` cards, solved by Newton-Raphson (see the [diodes](./docs/en/diodes.md) and [transistors](./docs/en/transistors.md) guides).
 
