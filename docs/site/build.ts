@@ -5,12 +5,15 @@
  * `docs/.build/` (the paths that `src/index.ts` attaches with `@document`),
  * figures are generated with ElecMap, then typedoc renders the site.
  *
+ * The playground (`docs/playground/`) is bundled into `docs/api/playground/`.
+ *
  * Run with `npm run docs`.
  */
 import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Application, TSConfigReader, TypeDocReader } from "typedoc";
+import { buildPlayground } from "../playground/build";
 import { writeFigures } from "./figures";
 import { FRENCH } from "./typedoc-plugin.mjs";
 
@@ -47,6 +50,7 @@ async function build(lang: Lang): Promise<void> {
     groupOrder: string[];
   };
   const other = lang === "fr" ? { English: SITE } : { Français: `${SITE}fr/` };
+  const playground = `${SITE}playground/${lang === "fr" ? "?lang=fr" : ""}`;
 
   const app = await Application.bootstrapWithPlugins(
     {
@@ -56,7 +60,11 @@ async function build(lang: Lang): Promise<void> {
       readme: join(stage, "home.md"),
       categoryOrder: config.categoryOrder.map(tr),
       groupOrder: config.groupOrder.map(tr),
-      navigationLinks: { ...other, GitHub: "https://github.com/LoanGue/ElecMap" },
+      navigationLinks: {
+        Playground: playground,
+        ...other,
+        GitHub: "https://github.com/LoanGue/ElecMap",
+      },
       cleanOutputDir: lang === "en",
     },
     [new TypeDocReader(), new TSConfigReader()],
@@ -80,3 +88,6 @@ for (const lang of only.length > 0 ? only : (["en", "fr"] as const)) {
   console.log(`documentation (${lang}) written`);
 }
 rmSync(stage, { recursive: true, force: true });
+// After the English build, which empties `docs/api/`.
+await buildPlayground(join(docs, "api", "playground"));
+console.log("playground written");

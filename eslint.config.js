@@ -9,7 +9,7 @@ export default tseslint.config(
       "docs/api",
       "node_modules",
       ".worktrees",
-      "playground",
+      "/playground",
       "notes",
       "examples/output",
     ],
