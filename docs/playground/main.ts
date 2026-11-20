@@ -3,7 +3,15 @@
  * documentation (`docs/api/playground/`). Everything runs in the browser.
  */
 import { ElecMap, ElecMapError, formatSI } from "../../src";
-import type { Complex, ComponentJSON, OutputSpec, TransferFunction } from "../../src";
+import type {
+  Complex,
+  ComponentJSON,
+  MonteCarlo,
+  MonteCarloBode,
+  OutputSpec,
+  TransferFunction,
+  TransferOptions,
+} from "../../src";
 import { plot } from "../site/plot";
 import type { Panel, Series } from "../site/plot";
 import { Editor, emptyDrawing, fromCircuit } from "./editor";
@@ -28,6 +36,13 @@ interface State {
   literal: boolean;
   fStart: string;
   fStop: string;
+  /** Monte-Carlo envelope of the Bode plot (tolerances in %). */
+  mc: boolean;
+  tolR: string;
+  tolC: string;
+  tolL: string;
+  tolOther: string;
+  runs: string;
   /** Transient. */
   tStop: string;
   tStep: string;
@@ -55,6 +70,12 @@ const state: State = {
   literal: false,
   fStart: "",
   fStop: "",
+  mc: false,
+  tolR: "5",
+  tolC: "10",
+  tolL: "10",
+  tolOther: "",
+  runs: "100",
   tStop: first.tStop !== undefined ? spice(first.tStop) : "",
   tStep: "",
   method: "gear2",
@@ -626,8 +647,94 @@ function transferPanel(c: ElecMap): string {
   return `${controls}
 <div class="pg-math" data-tex="${esc(latex)}"></div>${literalNote}
 ${metrics(H)}
-${bodeControls()}
-${bodePlot(H)}`;
+${bodeControls(true)}
+${state.mc ? monteCarloBode(c, spec, H) : bodePlot(H)}`;
+}
+
+/** Tolerances of the Monte-Carlo controls: R, C and L by kind, plus "id[.field] percent" entries. */
+function tolerances(c: ElecMap): Record<string, number> {
+  const byKind: Record<string, string> = {
+    resistor: state.tolR,
+    capacitor: state.tolC,
+    inductor: state.tolL,
+  };
+  const result: Record<string, number> = {};
+  for (const comp of c.components()) {
+    const pct = parseNumber(byKind[comp.type] ?? "");
+    if (pct !== undefined && pct > 0) result[comp.id] = pct / 100;
+  }
+  for (const entry of state.tolOther.split(/[,;\n]+/)) {
+    if (entry.trim() === "") continue;
+    const m = /^\s*([\w.]+)\s*[=:\s]\s*±?\s*([^\s%]+)\s*%?\s*$/.exec(entry);
+    const pct = m ? parseNumber(m[2] as string) : undefined;
+    if (!m || pct === undefined || pct < 0) throw new Error(`${t.tolSyntax}: "${entry.trim()}"`);
+    result[m[1] as string] = pct / 100;
+  }
+  return result;
+}
+
+function monteCarloBode(c: ElecMap, spec: TransferOptions, H: TransferFunction): string {
+  const [fStart, fStop] = frequencyRange(H);
+  let mc: MonteCarlo;
+  let bode: MonteCarloBode;
+  try {
+    const runs = Math.min(Math.max(Math.round(parseNumber(state.runs) ?? 100), 1), 2000);
+    mc = c.monteCarlo({ tolerances: tolerances(c), runs });
+    bode = mc.bode(spec, { fStart, fStop, points: 40 });
+  } catch (err) {
+    return `<p class="pg-error">${esc(message(err))}</p>${bodePlot(H)}`;
+  }
+  const peak = Math.max(...bode.nominal.magnitudeDb.filter(Number.isFinite));
+  const floor = Math.min(peak - 120, -40);
+  const clip = (v: readonly number[]) => v.map((x) => Math.max(x, floor));
+  const spread: [string, (h: TransferFunction) => number | undefined, string][] = [
+    [t.dcGain, (h) => h.dcGain(), ""],
+    [t.cutoff, (h) => attempt(() => h.cutoffFrequency()), "Hz"],
+    [t.f0, (h) => h.naturalFrequency(), "Hz"],
+    [t.q, (h) => h.qFactor(), ""],
+  ];
+  const rows = spread
+    .map(([label, f, unit]) => {
+      const s = mc.statistics((x) => f(x.transferFunction(spec)));
+      if (!Number.isFinite(s.nominal) || s.nominal === 0 || !Number.isFinite(s.min)) return "";
+      if (s.max - s.min <= Math.abs(s.nominal) * 1e-9) return "";
+      const num = (v: number) => (unit ? si(v, unit) : v.toPrecision(4));
+      const rel = (v: number) =>
+        `${v >= s.nominal ? "+" : "−"}${Math.abs((v / s.nominal - 1) * 100).toFixed(1)} %`;
+      return `<div><dt>${label}</dt><dd>${num(s.min)} … ${num(s.max)}<small>${rel(s.min)} / ${rel(s.max)} · σ ${num(s.std)}</small></dd></div>`;
+    })
+    .join("");
+  return `<dl class="pg-metrics pg-mc-stats">${rows}</dl>
+${figure(
+  {
+    logX: true,
+    xLabel: t.frequency,
+    panels: [
+      {
+        bands: [
+          {
+            x: bode.freq,
+            lo: clip(bode.magnitudeDb.min),
+            hi: clip(bode.magnitudeDb.max),
+            label: `${mc.length} ${t.runsLabel}`,
+          },
+        ],
+        series: [{ x: bode.freq, y: clip(bode.nominal.magnitudeDb), label: t.nominal }],
+        yLabel: t.gainDb,
+      },
+      {
+        bands: [{ x: bode.freq, lo: bode.phase.min, hi: bode.phase.max }],
+        series: [{ x: bode.freq, y: bode.nominal.phase, label: "φ" }],
+        yLabel: t.phase,
+        yTicks: phaseTicks([...bode.phase.min, ...bode.phase.max]),
+      },
+    ],
+  },
+  [
+    ["dB", 4],
+    ["°", 4],
+  ],
+)}`;
 }
 
 function metrics(H: TransferFunction): string {
@@ -673,11 +780,25 @@ function metrics(H: TransferFunction): string {
 </div>`;
 }
 
-function bodeControls(): string {
+function bodeControls(tolerance = false): string {
+  const pct = (key: "tolR" | "tolC" | "tolL", label: string) =>
+    `<label>${label} ±<input data-bind="${key}" value="${esc(state[key])}" size="3"> %</label>`;
+  const toggle = tolerance
+    ? `<button data-mc class="pg-toggle${state.mc ? " on" : ""}" title="${esc(t.mcHint)}">± ${t.mcEnvelope}</button>`
+    : "";
+  const mcRow =
+    tolerance && state.mc
+      ? `<div class="pg-controls pg-small pg-mc">
+  ${pct("tolR", "R")}${pct("tolC", "C")}${pct("tolL", "L")}
+  <label>${t.tolOther}<input data-bind="tolOther" value="${esc(state.tolOther)}" placeholder="${esc(t.tolOtherHint)}" size="14"></label>
+  <label><input data-bind="runs" value="${esc(state.runs)}" size="4"> ${t.runsLabel}</label>
+</div>`
+      : "";
   return `<div class="pg-controls pg-small">
   <label>${t.from}<input data-bind="fStart" placeholder="${t.auto}" value="${esc(state.fStart)}" size="7"> Hz</label>
   <label>${t.to}<input data-bind="fStop" placeholder="${t.auto}" value="${esc(state.fStop)}" size="7"> Hz</label>
-</div>`;
+  ${toggle}
+</div>${mcRow}`;
 }
 
 function frequencyRange(H: TransferFunction): [number, number] {
@@ -963,6 +1084,11 @@ const SHARED: (keyof State)[] = [
   "tStop",
   "zA",
   "zB",
+  "tolR",
+  "tolC",
+  "tolL",
+  "tolOther",
+  "runs",
 ];
 
 function shareUrl(): string {
@@ -972,6 +1098,7 @@ function shareUrl(): string {
     const v = state[key];
     if (typeof v === "string" && v !== "") hash.set(key, v);
   }
+  if (state.mc) hash.set("mc", "1");
   if (state.traces.length > 0) hash.set("traces", state.traces.join(","));
   if (state.currents.length > 0) hash.set("currents", state.currents.join(","));
   return `${location.origin}${location.pathname}${location.search}#${hash.toString()}`;
@@ -991,6 +1118,7 @@ function readHash(): boolean {
     const v = hash.get(key);
     if (v !== null) (state as unknown as Record<string, string>)[key] = v;
   }
+  state.mc = hash.get("mc") === "1";
   state.traces = hash.get("traces")?.split(",").filter(Boolean) ?? [];
   state.currents = hash.get("currents")?.split(",").filter(Boolean) ?? [];
   const d = hash.get("d");
@@ -1239,6 +1367,11 @@ function wire(): void {
     if (e.key === "Enter" && el.tagName === "INPUT") (el as HTMLInputElement).blur();
   });
   panel.addEventListener("click", (e) => {
+    if ((e.target as Element).closest("[data-mc]")) {
+      state.mc = !state.mc;
+      renderPanel();
+      return;
+    }
     const b = (e.target as Element).closest<HTMLButtonElement>("[data-literal]");
     if (b) {
       state.literal = b.dataset["literal"] === "1";

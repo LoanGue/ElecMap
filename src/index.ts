@@ -11,6 +11,7 @@
  * @document ../docs/.build/diodes.md
  * @document ../docs/.build/transistors.md
  * @document ../docs/.build/sensitivities.md
+ * @document ../docs/.build/tolerances.md
  * @document ../docs/.build/schematics.md
  * @document ../docs/.build/format.md
  * @document ../docs/.build/components.md
@@ -35,3 +36,13 @@ export * from "./render";
 export * from "./symbolic";
 export { ElecMap } from "./ElecMap";
 export type { AnalysisPoint, Sensitivity, SensitivityOptions, SensitivityOutput } from "./ElecMap";
+export { MonteCarlo, seededRandom } from "./montecarlo";
+export type {
+  MonteCarloOptions,
+  MonteCarloSample,
+  MonteCarloStatistics,
+  MonteCarloBand,
+  MonteCarloBode,
+  ToleranceSpec,
+  ToleranceDistribution,
+} from "./montecarlo";

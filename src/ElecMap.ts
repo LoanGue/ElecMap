@@ -19,6 +19,8 @@ import { layoutCircuit } from "./render/layout";
 import type { LayoutOptions } from "./render/layout";
 import type { SchematicLayout } from "./render/layout";
 import { renderSvg } from "./render/svg";
+import { MonteCarlo, drawDeviation, seededRandom } from "./montecarlo";
+import type { MonteCarloOptions, MonteCarloSample } from "./montecarlo";
 import { symbolicImpedance, symbolicTransferFunction } from "./symbolic/transfer";
 import type { SymbolicTransferFunction, SymbolicTransferOptions } from "./symbolic/transfer";
 import type { SymbolicOptions } from "./symbolic/system";
@@ -740,6 +742,81 @@ V1 in 0 …"
     }
     const key = (s: Sensitivity) => (Number.isNaN(s.normalized) ? -1 : Math.abs(s.normalized));
     return result.sort((a, b) => key(b) - key(a));
+  }
+
+  // ------------------------------------------------------------- Monte-Carlo
+
+  /**
+   * Monte-Carlo tolerance analysis: `runs` copies of the circuit, each with every
+   * toleranced component drawn at random around its value. The result gives the
+   * random circuits, statistics of any quantity over them and Bode envelopes.
+   * The circuit itself is not changed, and the same `seed` gives the same runs.
+   *
+   * @example
+   * ```ts
+   * const mc = c.monteCarlo({ tolerances: { R1: 0.05, C1: 0.1 }, runs: 200 });
+   * mc.samples[0].values; // { R1: 1012.7, C1: 9.005e-8 }   (drawn values of run 0)
+   *
+   * const fc = mc.statistics((x) => x.transferFunction("out").cutoffFrequency());
+   * fc.nominal; // 1591.5 Hz
+   * [fc.min, fc.max]; // [1390.7, 1835.6]
+   * fc.std; // 108.1
+   *
+   * const bode = mc.bode("out"); // Bode of every run, and its envelope
+   * bode.magnitudeDb.min; // lower edge of the envelope (dB, one value per frequency)
+   * ```
+   *
+   * @throws {@link ElecMapError} `NOT_FOUND` for an unknown component,
+   * `INVALID_ARGUMENT` for a field it does not have or a negative tolerance
+   */
+  monteCarlo(options: MonteCarloOptions): MonteCarlo {
+    const runs = options.runs ?? 100;
+    if (!Number.isInteger(runs) || runs < 1) {
+      throw new ElecMapError("INVALID_ARGUMENT", `runs must be a positive integer (got ${runs})`);
+    }
+    const doc = this.compiled.toJSON();
+    const fields = Object.entries(options.tolerances).map(([key, spec]) => {
+      const dot = key.lastIndexOf(".");
+      const known = doc.components.some((c) => c.id === key);
+      const id = known || dot < 0 ? key : key.slice(0, dot);
+      const field = known || dot < 0 ? undefined : key.slice(dot + 1);
+      const [comp, name] = fieldOf(doc, id, field);
+      const value = fieldValue(comp, name);
+      if (value === undefined) {
+        throw new ElecMapError("INVALID_ARGUMENT", `Component "${id}" has no value for "${name}"`, {
+          componentId: id,
+          field: name,
+        });
+      }
+      const s = typeof spec === "number" ? { tolerance: spec } : spec;
+      if (!(s.tolerance >= 0)) {
+        throw new ElecMapError(
+          "INVALID_ARGUMENT",
+          `Tolerance of "${key}" must be a non-negative number (got ${s.tolerance})`,
+          { componentId: id, field: name },
+        );
+      }
+      const distribution = s.distribution ?? options.distribution ?? "uniform";
+      return { key, id, name, value, tolerance: s.tolerance, distribution };
+    });
+    const random = seededRandom(options.seed ?? 1);
+    const samples: MonteCarloSample[] = Array.from({ length: runs }, (_, run) => ({
+      run,
+      values: Object.fromEntries(
+        fields.map((f) => [
+          f.key,
+          f.value * (1 + f.tolerance * drawDeviation(random, f.distribution)),
+        ]),
+      ),
+    }));
+    return new MonteCarlo(this, samples, (sample) => {
+      const copy = this.compiled.toJSON();
+      for (const f of fields) {
+        const [comp] = fieldOf(copy, f.id, f.name);
+        (comp as unknown as Record<string, unknown>)[f.name] = sample.values[f.key];
+      }
+      return new ElecMap(copy, this.clonedOptions());
+    });
   }
 
   /** The circuit with one field changed. */

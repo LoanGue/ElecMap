@@ -31,6 +31,7 @@ export const FRENCH = {
   "Voltages, currents & power": "Tensions, courants et puissance",
   "Impedances & equivalents": "Impédances et équivalents",
   Schematic: "Schéma",
+  "Sensitivities & tolerances": "Sensibilités et tolérances",
 };
 
 /** First matching prefix wins. */
@@ -39,6 +40,7 @@ const CATEGORY_BY_PATH = [
   ["src/core/circuit.ts", "Circuit"],
   ["src/index.ts", "Circuit"],
   ["src/core/errors.ts", "Circuit"],
+  ["src/montecarlo.ts", "Sensitivities & tolerances"],
   ["src/analysis/transfer.ts", "Transfer functions"],
   ["src/analysis/response.ts", "Time domain"],
   ["src/analysis/transient.ts", "Time domain"],
@@ -88,6 +90,7 @@ const ELECMAP_GROUPS = {
     "norton",
   ],
   "Time domain": ["transient"],
+  "Sensitivities & tolerances": ["sensitivity", "sensitivities", "monteCarlo"],
   Schematic: ["toSVG", "layout"],
 };
 

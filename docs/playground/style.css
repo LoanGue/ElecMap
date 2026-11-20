@@ -502,6 +502,40 @@ input {
   font-weight: 600;
 }
 
+.pg-toggle {
+  margin-left: auto;
+}
+.pg-toggle.on {
+  background: var(--soft);
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.pg-mc {
+  margin-top: -0.25rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 10px;
+  background: var(--soft);
+}
+.pg-mc input {
+  width: 3.5em;
+  text-align: right;
+}
+.pg-mc input[data-bind="tolOther"] {
+  width: 10em;
+  text-align: left;
+}
+.pg-mc-stats dd {
+  font-variant-numeric: tabular-nums;
+}
+.pg-mc-stats small {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--aside);
+  font-weight: 400;
+  font-size: 0.75rem;
+}
+
 .pg-math {
   padding: 0.6rem 1rem;
   border-radius: 10px;
@@ -690,6 +724,34 @@ input {
 }
 .em-plot .c5 {
   stroke: var(--fig-c5);
+}
+.em-plot .band {
+  stroke: none;
+  fill-opacity: 0.32;
+}
+.em-plot .band.c1 {
+  fill: var(--fig-c1);
+}
+.em-plot .band.c2 {
+  fill: var(--fig-c2);
+}
+.em-plot .band.c3 {
+  fill: var(--fig-c3);
+}
+.em-plot .bar.hist {
+  stroke: none;
+  fill-opacity: 0.8;
+}
+.em-plot .bar.hist.c1 {
+  fill: var(--fig-c1);
+}
+.em-plot .bar.hist.c2 {
+  fill: var(--fig-c2);
+}
+.em-plot .marker {
+  fill: none;
+  stroke-width: 1.6;
+  stroke-dasharray: 5 4;
 }
 .em-plot .tick {
   fill: var(--fig-muted);
