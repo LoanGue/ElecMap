@@ -52,6 +52,7 @@ Examples: `1k`, `4.7u`, `100nF`, `1e-3`, `2MEG`. The European notation is suppor
 | `Gname n+ n- nc+ nc- gm`                     | voltage-controlled current source                              |
 | `Fname n+ n- Vctrl gain`                     | current-controlled current source                              |
 | `Hname n+ n- Vctrl r`                        | current-controlled voltage source                              |
+| `Bname n+ n- V=expr` / `I=expr`              | behavioural source (see [guide](./behavioral-sources.md))      |
 | `Kname L1 L2 k`                              | coupled inductors, `0 < k ≤ 1`                                 |
 | `Xname in+ in- out OPAMP [GAIN=a] [GBW=f]`   | op-amp _(ElecMap extension)_                                   |
 | `Xname node… NAME [K=v…]`                    | subcircuit instance (see [below](#subcircuits-and-parameters)) |

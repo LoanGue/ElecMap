@@ -1,5 +1,7 @@
 import { COMPONENT_CATALOG } from "./catalog";
 import type { NumberConstraint } from "./catalog";
+import { parseExpression, probesOf } from "./expression";
+import type { Expr } from "./expression";
 import type { ComponentJSON, NodeName } from "./types";
 
 /** Severity of a {@link ValidationIssue}. Errors prevent compilation. */
@@ -137,6 +139,16 @@ function checkComponent(c: unknown, index: number, issues: ValidationIssue[]): c
       ok = false;
     }
   }
+  if (spec.type === "bsource") {
+    if (c["kind"] !== "voltage" && c["kind"] !== "current") {
+      err("MALFORMED", `${id}: "kind" must be "voltage" or "current"`, id);
+      ok = false;
+    }
+    if (typeof c["expression"] !== "string" || c["expression"].trim() === "") {
+      err("MALFORMED", `${id}: "expression" must be a non-empty string`, id);
+      ok = false;
+    }
+  }
   if (spec.type === "switch" && typeof c["closed"] !== "boolean") {
     err("MALFORMED", `${id}: "closed" must be a boolean`, id);
     ok = false;
@@ -169,6 +181,53 @@ function checkComponent(c: unknown, index: number, issues: ValidationIssue[]): c
     }
   }
   return ok;
+}
+
+/** Component types whose current `I(id)` a behavioural expression may use. */
+const CURRENT_PROBES: readonly string[] = [
+  "resistor",
+  "inductor",
+  "vsource",
+  "vcvs",
+  "vccs",
+  "cccs",
+  "ccvs",
+  "bsource",
+  "opamp",
+  "diode",
+  "switch",
+];
+
+/** Upper-case identifiers (parameters, constants, `TIME`) of an expression. */
+function identifiers(e: Expr): string[] {
+  switch (e.k) {
+    case "id":
+      return [e.name];
+    case "unary":
+      return identifiers(e.x);
+    case "binary":
+      return [...identifiers(e.l), ...identifiers(e.r)];
+    case "call":
+      return e.args.flatMap(identifiers);
+    default:
+      return [];
+  }
+}
+
+/** Nodes read by the `V()` probes of a behavioural expression (none if it does not parse). */
+function probeNodes(expression: string): NodeName[] {
+  try {
+    const e = parseExpression(
+      expression,
+      (m) => {
+        throw new Error(m);
+      },
+      { probes: true },
+    );
+    return probesOf(e).flatMap((p) => (p.kind === "V" ? p.args : []));
+  } catch {
+    return [];
+  }
 }
 
 /** Electrical nodes a component connects to (control ports excluded). */
@@ -221,6 +280,43 @@ export function validateCircuit(input: unknown, ground = "0"): ValidationIssue[]
         );
       }
     }
+    if (c.type === "bsource") {
+      let e: Expr;
+      try {
+        e = parseExpression(
+          c.expression,
+          (m) => {
+            throw new Error(m);
+          },
+          { probes: true },
+        );
+      } catch (x) {
+        error("INVALID_VALUE", `${c.id}: ${(x as Error).message}`, { componentId: c.id });
+        continue;
+      }
+      const unknown = identifiers(e).filter((n) => n !== "TIME" && n !== "PI" && n !== "E");
+      if (unknown.length > 0) {
+        error(
+          "INVALID_VALUE",
+          `${c.id}: unknown parameter "${(unknown[0] as string).toLowerCase()}" in "${c.expression}"`,
+          { componentId: c.id },
+        );
+      }
+      for (const p of probesOf(e)) {
+        if (p.kind === "I") {
+          const target = byId.get(p.args[0] as string);
+          if (!target || !CURRENT_PROBES.includes(target.type)) {
+            error(
+              "UNKNOWN_REFERENCE",
+              target
+                ? `${c.id}: the current of ${target.id} (${target.type}) cannot be used in an expression`
+                : `${c.id}: unknown component "${p.args[0] as string}" in I()`,
+              { componentId: c.id },
+            );
+          }
+        }
+      }
+    }
     if (c.type === "coupling") {
       const [a, b] = c.inductors;
       for (const l of [a, b]) {
@@ -243,9 +339,18 @@ export function validateCircuit(input: unknown, ground = "0"): ValidationIssue[]
     error("NO_GROUND", `No component is connected to the ground node "${ground}"`);
     return issues;
   }
+  // Nodes read by a controlled or behavioural source: not dangling when one terminal drives them.
+  const sensed = new Set<NodeName>();
   for (const c of components) {
-    if (c.type === "vcvs" || c.type === "vccs") {
-      for (const n of c.control) {
+    const controls =
+      c.type === "vcvs" || c.type === "vccs"
+        ? c.control
+        : c.type === "bsource"
+          ? probeNodes(c.expression)
+          : [];
+    if (controls.length > 0) {
+      for (const n of controls) {
+        sensed.add(g(n));
         if (!usage.has(g(n))) {
           error("UNKNOWN_REFERENCE", `${c.id}: control node "${n}" is not connected to anything`, {
             componentId: c.id,
@@ -268,7 +373,7 @@ export function validateCircuit(input: unknown, ground = "0"): ValidationIssue[]
     }
   }
   for (const [node, count] of usage) {
-    if (count === 1 && node !== ground) {
+    if (count === 1 && node !== ground && !sensed.has(node)) {
       warn("DANGLING_NODE", `Node "${node}" is connected to a single terminal`, { node });
     }
   }
@@ -329,7 +434,13 @@ export function validateCircuit(input: unknown, ground = "0"): ValidationIssue[]
   const voltageDefined: ComponentJSON[] = [];
   const inductive: ComponentJSON[] = [];
   for (const c of components) {
-    if (c.type === "vsource" || c.type === "vcvs" || c.type === "ccvs") voltageDefined.push(c);
+    if (
+      c.type === "vsource" ||
+      c.type === "vcvs" ||
+      c.type === "ccvs" ||
+      (c.type === "bsource" && c.kind === "voltage")
+    )
+      voltageDefined.push(c);
     else if (c.type === "switch" && c.closed && !c.ron) voltageDefined.push(c);
     else if (c.type === "inductor") inductive.push(c);
   }

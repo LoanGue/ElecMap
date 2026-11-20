@@ -10,6 +10,7 @@
  * @document ../docs/.build/time-domain.md
  * @document ../docs/.build/diodes.md
  * @document ../docs/.build/transistors.md
+ * @document ../docs/.build/behavioral-sources.md
  * @document ../docs/.build/sensitivities.md
  * @document ../docs/.build/tolerances.md
  * @document ../docs/.build/schematics.md

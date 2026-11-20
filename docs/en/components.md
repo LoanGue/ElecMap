@@ -62,3 +62,11 @@ The controlling current of `cccs` / `ccvs` is the current through an independent
 - **MOSFET:** SPICE level 1 (Shichman-Hodges) with channel-length modulation and body effect, symmetric in drain and source. `current("M1")` is the drain current; the gate and bulk draw none.
 
 See the [transistors guide](./transistors.md).
+
+## Behavioural sources
+
+| Type      | SPICE                  | `nodes`  | Fields                                            |
+| --------- | ---------------------- | -------- | ------------------------------------------------- |
+| `bsource` | `B… V=expr` / `I=expr` | `[p, n]` | `kind` (`"voltage"` or `"current"`), `expression` |
+
+- **Behavioural source:** a voltage `V(p) − V(n)` or a current (from `p` to `n` through the source) given by an expression of `V(a)`, `V(a,b)`, `I(id)` and `time`. The circuit is non-linear; small-signal analyses use the expression linearised at the operating point. See the [behavioural sources guide](./behavioral-sources.md).

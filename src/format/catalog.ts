@@ -115,6 +115,13 @@ export const COMPONENT_CATALOG: Readonly<Record<ComponentType, ComponentSpec>> =
     ports: ["a", "b"],
     numbers: { ron: [false, "nonNegative"], roff: [false, "positive"] },
   },
+  bsource: {
+    type: "bsource",
+    letter: "B",
+    name: "Behavioural source",
+    ports: ["p", "n"],
+    numbers: {},
+  },
   diode: {
     type: "diode",
     letter: "D",

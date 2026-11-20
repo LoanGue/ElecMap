@@ -15,6 +15,8 @@ import {
   mosfetParams,
   mosfetThreshold,
 } from "./devices";
+import { compileExpression } from "./behavioral";
+import type { CompiledExpression, ProbeForm } from "./behavioral";
 
 /**
  * One term `(g + s·c) · x[index]` of a {@link LinearForm}.
@@ -96,6 +98,10 @@ export interface LoadContext {
   limited(): void;
   /** Conductance placed across every junction (S). */
   readonly gmin: number;
+  /** Time of the solve (s), 0 outside transient analysis. */
+  readonly time: number;
+  /** Current of a component as a combination of unknowns (behavioural sources' `I()`). */
+  current(id: string): ProbeForm;
 }
 
 /**
@@ -629,9 +635,63 @@ export const MODELS: ModelMap = {
     },
   },
 
+  bsource: {
+    // Branch current I (p → n through the source). The branch row holds
+    // V(p) − V(n) − F(x) = 0 (voltage) or I − F(x) = 0 (current), linearised:
+    // … − Σ ∂F/∂uⱼ·uⱼ(x) = F(u₀) − Σ ∂F/∂uⱼ·uⱼ₀.
+    branches: () => 1,
+    stamp(c, ctx) {
+      stampBranchIncidence(ctx, ctx.branch(c.id), ctx.node(c.nodes[0]), ctx.node(c.nodes[1]));
+    },
+    current: (c, ctx) => branchForm(ctx.branch(c.id)),
+    load(c, ctx) {
+      const [p, n, k] = [ctx.node(c.nodes[0]), ctx.node(c.nodes[1]), ctx.branch(c.id)];
+      const f = compiled(c, ctx);
+      const u = f.probes.map((form) =>
+        form.reduce((s, t) => s + t.coef * (ctx.x[t.index] as number), 0),
+      );
+      let { value, gradient } = f.evaluate(u, ctx.time);
+      if (ctx.state) {
+        if (Number.isFinite(value)) ctx.state["value"] = value;
+        else {
+          // Outside the domain of the expression (ln 0, 1/0…), typically at the
+          // first iterate: hold the last value, and do not accept this iterate.
+          ctx.limited();
+          value = ctx.state["value"] ?? 0;
+          gradient = gradient.map(() => 0);
+        }
+      }
+      if (c.kind === "voltage") {
+        ctx.addJ(k, p, 1);
+        ctx.addJ(k, n, -1);
+      } else {
+        ctx.addJ(k, k, 1);
+      }
+      let rhs = value;
+      f.probes.forEach((form, j) => {
+        const g = gradient[j] as number;
+        if (g === 0) return;
+        for (const t of form) ctx.addJ(k, t.index, -g * t.coef);
+        rhs -= g * (u[j] as number);
+      });
+      ctx.addB(k, rhs);
+    },
+  },
   bjt: bjtModel,
   mosfet: mosfetModel,
 };
+
+const compiledExpressions = new WeakMap<object, CompiledExpression>();
+
+/** Compiled expression of a behavioural source (cached per component object). */
+function compiled(c: Extract<ComponentJSON, { type: "bsource" }>, ctx: LoadContext) {
+  let f = compiledExpressions.get(c);
+  if (!f) {
+    f = compileExpression(c.id, c.expression, { node: ctx.node, current: ctx.current });
+    compiledExpressions.set(c, f);
+  }
+  return f;
+}
 
 /** Returns the built-in model of a component. */
 export function modelOf(c: ComponentJSON): ComponentModel {

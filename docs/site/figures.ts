@@ -710,4 +710,74 @@ export function writeFigures(dir: string, lang: "en" | "fr" = "en"): void {
       ).replace(">runs<", `>${runs}<`),
     );
   }
+
+  // ---------------------------------------------------------------- behavioural sources
+  {
+    const squarer = new ElecMap(`
+    V1 in 0 DC 3 AC 1
+    R1 in 0 1k
+    B1 out 0 V=V(in)^2/2
+    RL out 0 1k
+    `);
+    save(
+      "behavioral-squarer.svg",
+      squarer.toSVG({ theme: "none", showValues: true, title: t("Squarer", "Élévation au carré") }),
+    );
+    const ota = new ElecMap(`
+    VIN in 0 0
+    B1 0 out I=1m*tanh(V(in)/52m)
+    RL out 0 10k
+    `);
+    const vin: number[] = [];
+    const vout: number[] = [];
+    const gain: number[] = [];
+    for (let k = -60; k <= 60; k++) {
+      const v = k / 200;
+      ota.setValue("VIN", v);
+      vin.push(v * 1e3);
+      vout.push(ota.voltage("out"));
+      gain.push(ota.transferFunction({ input: "VIN", output: "out" }).dcGain());
+    }
+    save(
+      "behavioral-ota.svg",
+      plot({
+        xLabel: "V(in) (mV)",
+        xFormat: (v) => String(Number(v.toPrecision(3))),
+        panels: [
+          {
+            series: [{ x: vin, y: vout, label: "V(out)" }],
+            yLabel: t("Voltage (V)", "Tension (V)"),
+          },
+          {
+            series: [{ x: vin, y: gain, label: t("small-signal gain", "gain petit signal") }],
+            yLabel: "dV(out)/dV(in)",
+          },
+        ],
+      }),
+    );
+    const am = new ElecMap(`
+    VC c 0 SIN(0 1 10k)
+    VM m 0 SIN(0 1 500)
+    B1 am 0 V=(1+0.5*V(m))*V(c)
+    R1 am 0 1k
+    `);
+    const tr = am.transient({ tStop: 4e-3, tStep: 5e-6 });
+    const ms = tr.time.map((v) => v * 1e3);
+    save(
+      "behavioral-am.svg",
+      plot({
+        xLabel: t("Time (ms)", "Temps (ms)"),
+        xFormat: (v) => String(Number(v.toPrecision(3))),
+        panels: [
+          {
+            series: [
+              { x: ms, y: tr.voltage("am"), label: "V(am)" },
+              { x: ms, y: tr.voltage("m").map((v) => 1 + 0.5 * v), label: "1 + 0.5·V(m)" },
+            ],
+            yLabel: t("Voltage (V)", "Tension (V)"),
+          },
+        ],
+      }),
+    );
+  }
 }

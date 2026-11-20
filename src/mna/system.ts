@@ -3,6 +3,7 @@ import { ElecMapError } from "../core/errors";
 import type { ComponentJSON, NodeName } from "../format/types";
 import { Complex } from "../math/complex";
 import { Polynomial } from "../math/polynomial";
+import type { ProbeForm } from "./behavioral";
 import { modelOf } from "./models";
 import type {
   FormContext,
@@ -147,6 +148,7 @@ export class MnaSystem {
     gmin: number,
     initial = false,
     charge?: number,
+    time = 0,
   ): boolean {
     let limited = false;
     for (const c of this.nonlinear) {
@@ -170,6 +172,8 @@ export class MnaSystem {
         initial,
         limited: () => (limited = true),
         gmin,
+        time,
+        current: (id) => this.currentProbe(id),
       };
       modelOf(c).load?.(c, ctx);
     }
@@ -191,6 +195,28 @@ export class MnaSystem {
       }
     }
     return limited;
+  }
+
+  /**
+   * Current of a component as a combination of unknowns, for the `I()` of a
+   * behavioural expression.
+   * @throws {@link ElecMapError} `UNSUPPORTED` if it depends on `s` or on a source value
+   */
+  private currentProbe(id: string): ProbeForm {
+    const comp = this.circuit.component(id);
+    const f = modelOf(comp).current(comp, {
+      node: (n) => this.node(n),
+      branch: (b) => this.branch(b),
+      component: (b) => this.circuit.component(b),
+    });
+    if (f.sources.length > 0 || f.terms.some((t) => t.c !== 0)) {
+      throw new ElecMapError(
+        "UNSUPPORTED",
+        `The current of ${id} (${comp.type}) cannot be used in a behavioural expression`,
+        { componentId: id },
+      );
+    }
+    return f.terms.filter((t) => t.g !== 0).map((t) => ({ index: t.index, coef: t.g }));
   }
 
   /** True if some device stores a junction charge (bias-dependent capacitance). */

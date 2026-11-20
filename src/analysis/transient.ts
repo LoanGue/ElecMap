@@ -160,7 +160,7 @@ export function transient(system: MnaSystem, options: TransientOptions): Transie
       return (b) => lu.solve(b);
     }
     return (b, guess, t) => {
-      const r = newtonSolve(system, A, b, guess, states, {}, false, a);
+      const r = newtonSolve(system, A, b, guess, states, {}, false, a, t);
       if (!r) {
         throw new ElecMapError(
           "NO_CONVERGENCE",
