@@ -53,6 +53,8 @@
   --fig-c1: #2563eb;
   --fig-c2: #ea580c;
   --fig-c3: #0ca678;
+  --fig-c4: #9333ea;
+  --fig-c5: #db2777;
   --code-bg: #0f172a;
   --code-fg: #e2e8f0;
 }
@@ -67,6 +69,8 @@
   --fig-c1: #7fb0ff;
   --fig-c2: #ffa94d;
   --fig-c3: #38d9a9;
+  --fig-c4: #c4a1ff;
+  --fig-c5: #f78fc5;
   --code-bg: #0a0f1a;
 }
 
@@ -81,6 +85,8 @@
     --fig-c1: #7fb0ff;
     --fig-c2: #ffa94d;
     --fig-c3: #38d9a9;
+    --fig-c4: #c4a1ff;
+    --fig-c5: #f78fc5;
     --code-bg: #0a0f1a;
   }
 }
@@ -463,6 +469,12 @@ pre button {
 }
 .em-plot .c3 {
   stroke: var(--fig-c3);
+}
+.em-plot .c4 {
+  stroke: var(--fig-c4);
+}
+.em-plot .c5 {
+  stroke: var(--fig-c5);
 }
 .em-plot .bar {
   stroke: none;

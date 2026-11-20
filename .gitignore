@@ -14,7 +14,7 @@ docs/api/
 # Local-only work (never published)
 .worktrees/
 notes/
-playground/
+/playground/
 
 # Environment & secrets
 .env

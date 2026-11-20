@@ -1,7 +1,7 @@
 <div class="em-hero">
 <h1>ElecMap</h1>
 <p class="em-tagline">Décrivez un circuit en quelques lignes de SPICE. Obtenez sa fonction de transfert, ses tensions, courants, impédances, sa réponse temporelle et son schéma, le tout depuis une seule classe TypeScript.</p>
-<div class="em-buttons"><a class="em-button" href="./getting-started.md">Commencer →</a><span class="em-button em-ghost">{@link ElecMap | Référence de l'API}</span><a class="em-button em-ghost" href="https://github.com/LoanGue/ElecMap">GitHub</a></div>
+<div class="em-buttons"><a class="em-button" href="./getting-started.md">Commencer →</a><span class="em-button em-ghost">{@link ElecMap | Référence de l'API}</span><a class="em-button em-ghost" href="https://loangue.github.io/ElecMap/playground/?lang=fr">Essayer en ligne</a><a class="em-button em-ghost" href="https://github.com/LoanGue/ElecMap">GitHub</a></div>
 </div>
 
 ## En 30 secondes
@@ -51,6 +51,7 @@ Chaque guide est une suite de courts exemples exécutables, accompagnés de leur
 <a class="em-card" href="./sensitivities.md"><span class="em-icon">∂</span><strong>Sensibilités</strong><span>Quel composant compte : dérivées, classement, stabilité de polarisation.</span></a>
 <a class="em-card" href="./schematics.md"><span class="em-icon">✏️</span><strong>Schémas</strong><span>Dessins SVG automatiques, CEI ou ANSI, interactifs.</span></a>
 <a class="em-card" href="./format.md"><span class="em-icon">📄</span><strong>Netlists et JSON</strong><span>Syntaxe d'entrée, format JSON, erreurs de validation.</span></a>
+<a class="em-card" href="https://loangue.github.io/ElecMap/playground/?lang=fr"><span class="em-icon">▶</span><strong>Playground</strong><span>Éditez une netlist dans le navigateur : schéma, Bode, transitoire, impédance.</span></a>
 </div>
 
 ## Ce qu'il contient

@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/LoanGue/ElecMap/actions/workflows/ci.yml/badge.svg)](https://github.com/LoanGue/ElecMap/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-API-blue.svg)](https://loangue.github.io/ElecMap/)
+[![Playground](https://img.shields.io/badge/try-playground-2563eb.svg)](https://loangue.github.io/ElecMap/playground/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 > A TypeScript engine for electrical circuit analysis: describe a circuit as a SPICE netlist or JSON, then get transfer functions (numeric and literal, in LaTeX), node voltages, branch currents, equivalent impedances, time-domain responses and an SVG schematic, all from a single importable class.
@@ -64,6 +65,7 @@ Runnable with `npx tsx examples/<name>.ts` (all of them run in CI):
 - [Input formats](./docs/en/format.md): netlist syntax, JSON document, validation codes.
 - [Component catalogue](./docs/en/components.md): ports, fields, sign conventions.
 - [Algorithms](./docs/en/algorithms.md): MNA, transfer functions, transient, layout, symbolic engine.
+- [Playground](https://loangue.github.io/ElecMap/playground/): write a netlist in the browser and see its schematic, operating point, transfer function, Bode plot, transient response and impedance; the link of the **Share** button reproduces the circuit and the view. `npm run playground` serves it locally.
 - [Documentation site](https://loangue.github.io/ElecMap/): guides with runnable examples and the full API reference, also [in French](https://loangue.github.io/ElecMap/fr/). It is rebuilt on every push to `main`; `npm run docs` builds it locally into `docs/api` (sources in `docs/en`, `docs/fr` and `docs/site`).
 
 ## Circuit input

@@ -1,0 +1,698 @@
+/* ElecMap playground. Same palette and fonts as the documentation theme. */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap");
+
+:root {
+  --bg: #f6f8fb;
+  --card: #ffffff;
+  --text: #1b2533;
+  --aside: #5b6878;
+  --line: #e3e8ef;
+  --soft: #eef3fc;
+  --accent: #2563eb;
+  --accent-ink: #ffffff;
+  --ok: #0c8a63;
+  --warn-bg: #fff7e6;
+  --warn: #9a5b00;
+  --err-bg: #fdecec;
+  --err: #b42318;
+  --editor-bg: #0f172a;
+  --editor-fg: #e2e8f0;
+  --radius: 12px;
+
+  --fig-fg: #1b2533;
+  --fig-wire: #1b2533;
+  --fig-muted: #64748b;
+  --fig-grid: #e5e9f0;
+  --fig-accent: #2563eb;
+  --fig-hl: #dc2626;
+  --fig-c1: #2563eb;
+  --fig-c2: #ea580c;
+  --fig-c3: #0ca678;
+  --fig-c4: #9333ea;
+  --fig-c5: #db2777;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #0b111c;
+  --card: #111a28;
+  --text: #e2e8f0;
+  --aside: #94a3b8;
+  --line: #223047;
+  --soft: #16233a;
+  --accent: #7fb0ff;
+  --accent-ink: #0b1220;
+  --ok: #38d9a9;
+  --warn-bg: #2a2111;
+  --warn: #fcc66d;
+  --err-bg: #2c1517;
+  --err: #ff8f87;
+  --editor-bg: #0a0f1a;
+  --fig-fg: #e2e8f0;
+  --fig-wire: #cbd5e1;
+  --fig-muted: #94a3b8;
+  --fig-grid: #243146;
+  --fig-accent: #7fb0ff;
+  --fig-hl: #ff7b72;
+  --fig-c1: #7fb0ff;
+  --fig-c2: #ffa94d;
+  --fig-c3: #38d9a9;
+  --fig-c4: #c4a1ff;
+  --fig-c5: #f78fc5;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="os"] {
+    --bg: #0b111c;
+    --card: #111a28;
+    --text: #e2e8f0;
+    --aside: #94a3b8;
+    --line: #223047;
+    --soft: #16233a;
+    --accent: #7fb0ff;
+    --accent-ink: #0b1220;
+    --ok: #38d9a9;
+    --warn-bg: #2a2111;
+    --warn: #fcc66d;
+    --err-bg: #2c1517;
+    --err: #ff8f87;
+    --editor-bg: #0a0f1a;
+    --fig-fg: #e2e8f0;
+    --fig-wire: #cbd5e1;
+    --fig-muted: #94a3b8;
+    --fig-grid: #243146;
+    --fig-accent: #7fb0ff;
+    --fig-hl: #ff7b72;
+    --fig-c1: #7fb0ff;
+    --fig-c2: #ffa94d;
+    --fig-c3: #38d9a9;
+    --fig-c4: #c4a1ff;
+    --fig-c5: #f78fc5;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    15px/1.5 Inter,
+    system-ui,
+    sans-serif;
+}
+
+code,
+pre,
+textarea {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+
+h2,
+h3 {
+  font-family: "Space Grotesk", Inter, sans-serif;
+  margin: 0;
+}
+h2 {
+  font-size: 1.05rem;
+}
+h3 {
+  font-size: 0.9rem;
+  color: var(--aside);
+  margin-bottom: 0.3rem;
+}
+
+a {
+  color: var(--accent);
+}
+
+button,
+select,
+input {
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.3rem 0.6rem;
+}
+button {
+  cursor: pointer;
+}
+button:hover,
+select:hover {
+  border-color: var(--accent);
+}
+input {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+.pg-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+/* ----------------------------------------------------------------- header */
+
+.pg-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 1.4rem;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+.pg-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text);
+  text-decoration: none;
+  font:
+    700 1.2rem "Space Grotesk",
+    Inter,
+    sans-serif;
+}
+.pg-logo {
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 1.1rem;
+}
+.pg-sub {
+  color: var(--aside);
+  font-weight: 500;
+}
+.pg-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+@media (max-width: 640px) {
+  .pg-header {
+    position: static;
+    flex-wrap: wrap;
+    padding: 0.6rem 1rem;
+  }
+  .pg-nav {
+    gap: 0.6rem;
+  }
+}
+.pg-nav a {
+  text-decoration: none;
+  font-weight: 500;
+}
+
+/* ----------------------------------------------------------------- layout */
+
+.pg-main {
+  display: grid;
+  grid-template-columns: minmax(340px, 5fr) 7fr;
+  gap: 1.2rem;
+  padding: 1.2rem 1.4rem 2rem;
+  align-items: start;
+}
+@media (max-width: 1000px) {
+  .pg-main {
+    grid-template-columns: 1fr;
+    padding: 1rem;
+  }
+}
+.pg-left {
+  display: grid;
+  gap: 1.2rem;
+  min-width: 0;
+}
+.pg-right {
+  min-width: 0;
+}
+
+.pg-card {
+  min-width: 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+}
+.pg-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.7rem;
+}
+.pg-tools {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.pg-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: var(--aside);
+}
+
+/* ----------------------------------------------------------------- editor */
+
+#pg-netlist {
+  display: block;
+  width: 100%;
+  min-height: 15rem;
+  resize: vertical;
+  padding: 0.8rem 0.9rem;
+  border: 0;
+  border-radius: 10px;
+  background: var(--editor-bg);
+  color: var(--editor-fg);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  tab-size: 2;
+  outline: none;
+}
+#pg-netlist:focus {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+#pg-status {
+  margin-top: 0.6rem;
+  font-size: 0.85rem;
+}
+.pg-ok {
+  margin: 0;
+  color: var(--ok);
+  font-weight: 500;
+}
+.pg-warn,
+.pg-error {
+  margin-top: 0.4rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+.pg-warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.pg-warn ul {
+  margin: 0.2rem 0 0;
+  padding-left: 1.1rem;
+}
+.pg-error {
+  background: var(--err-bg);
+  color: var(--err);
+}
+.pg-error pre {
+  margin: 0.25rem 0 0;
+  white-space: pre-wrap;
+  font-size: 0.8rem;
+}
+
+/* -------------------------------------------------------------- schematic */
+
+.pg-schematic {
+  text-align: center;
+  min-height: 10rem;
+  padding: 0.6rem;
+  border-radius: 10px;
+  background: var(--bg);
+  overflow: auto;
+}
+.pg-schematic svg {
+  height: auto;
+}
+.pg-stale {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.elecmap .bg {
+  fill: none;
+}
+.elecmap .w,
+.elecmap .s {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.elecmap .w {
+  stroke: var(--fig-wire);
+  cursor: pointer;
+}
+.elecmap .s {
+  stroke: var(--fig-fg);
+}
+.elecmap .f {
+  fill: var(--fig-fg);
+}
+.elecmap .j {
+  fill: var(--fig-wire);
+}
+.elecmap .k {
+  stroke-dasharray: 4 3;
+}
+.elecmap text {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  fill: var(--fig-fg);
+}
+.elecmap .id {
+  font-weight: 600;
+}
+.elecmap .val {
+  fill: var(--fig-muted);
+}
+.elecmap .node {
+  fill: var(--fig-accent);
+  font-style: italic;
+  font-size: 11px;
+}
+.elecmap g[data-id] {
+  cursor: pointer;
+}
+.elecmap .w:hover,
+.elecmap .w.hover {
+  stroke: var(--fig-accent);
+  stroke-width: 4;
+}
+.elecmap g[data-id]:hover .s,
+.elecmap g.hover .s {
+  stroke: var(--fig-accent);
+}
+.elecmap g[data-id]:hover text,
+.elecmap g.hover text {
+  fill: var(--fig-accent);
+}
+.elecmap .hl .s,
+.elecmap .w.hl {
+  stroke: var(--fig-hl);
+}
+.elecmap .hl .f,
+.elecmap .j.hl {
+  fill: var(--fig-hl);
+}
+.elecmap .hl text {
+  fill: var(--fig-hl);
+}
+
+/* ------------------------------------------------------------------- tabs */
+
+.pg-tabs {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  margin: -0.2rem 0 1rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--line);
+}
+.pg-tabs button {
+  border-color: transparent;
+  background: none;
+  font-weight: 500;
+  color: var(--aside);
+}
+.pg-tabs button.on {
+  background: var(--soft);
+  color: var(--accent);
+  border-color: transparent;
+}
+
+.pg-panel {
+  display: grid;
+  gap: 1rem;
+}
+.pg-note {
+  margin: 0;
+  color: var(--aside);
+  font-size: 0.85rem;
+}
+.pg-dim {
+  color: var(--aside);
+}
+
+.pg-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1.2rem;
+  font-size: 0.85rem;
+}
+.pg-controls label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--aside);
+}
+.pg-small {
+  font-size: 0.8rem;
+}
+.pg-seg {
+  display: inline-flex;
+  margin-left: auto;
+}
+.pg-seg button {
+  border-radius: 0;
+}
+.pg-seg button:first-child {
+  border-radius: 8px 0 0 8px;
+}
+.pg-seg button:last-child {
+  border-radius: 0 8px 8px 0;
+  border-left: 0;
+}
+.pg-seg button.on {
+  background: var(--soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.pg-math {
+  padding: 0.6rem 1rem;
+  border-radius: 10px;
+  background: var(--soft);
+  overflow-x: auto;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.85rem;
+}
+.pg-math .katex-display {
+  margin: 0.3rem 0;
+}
+
+.pg-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+}
+.pg-metrics div {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.pg-metrics dt {
+  font-size: 0.75rem;
+  color: var(--aside);
+}
+.pg-metrics dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.pg-grid2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+.pg-roots p {
+  margin: 0;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.pg-table th,
+.pg-table td {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+.pg-table th {
+  font-size: 0.75rem;
+  color: var(--aside);
+  font-weight: 600;
+}
+.pg-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pg-table tbody tr:hover,
+.pg-table tr.sel {
+  background: var(--soft);
+}
+.pg-table tfoot td {
+  border-bottom: 0;
+  color: var(--aside);
+}
+
+.pg-traces {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+.pg-traces > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.8rem;
+}
+.pg-traces span {
+  min-width: 5.5rem;
+  color: var(--aside);
+}
+.pg-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ plots */
+
+.pg-plot {
+  position: relative;
+  margin: 0;
+}
+.pg-plot svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.pg-cursor {
+  position: absolute;
+  width: 1px;
+  background: var(--fig-muted);
+  pointer-events: none;
+}
+.pg-readout {
+  position: absolute;
+  z-index: 2;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+.pg-readout-x {
+  color: var(--aside);
+  margin-bottom: 0.15rem;
+}
+.pg-readout i {
+  display: inline-block;
+  width: 0.7rem;
+  height: 3px;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+  border-radius: 2px;
+}
+.pg-readout .c1 {
+  background: var(--fig-c1);
+}
+.pg-readout .c2 {
+  background: var(--fig-c2);
+}
+.pg-readout .c3 {
+  background: var(--fig-c3);
+}
+.pg-readout .c4 {
+  background: var(--fig-c4);
+}
+.pg-readout .c5 {
+  background: var(--fig-c5);
+}
+
+.em-plot {
+  font-family: Inter, system-ui, sans-serif;
+}
+.em-plot .frame {
+  fill: none;
+  stroke: var(--fig-grid);
+}
+.em-plot .grid {
+  stroke: var(--fig-grid);
+  stroke-width: 1;
+}
+.em-plot .grid.minor {
+  stroke-width: 0.5;
+}
+.em-plot .line {
+  fill: none;
+  stroke-width: 2.2;
+  stroke-linejoin: round;
+}
+.em-plot .c1 {
+  stroke: var(--fig-c1);
+}
+.em-plot .c2 {
+  stroke: var(--fig-c2);
+}
+.em-plot .c3 {
+  stroke: var(--fig-c3);
+}
+.em-plot .c4 {
+  stroke: var(--fig-c4);
+}
+.em-plot .c5 {
+  stroke: var(--fig-c5);
+}
+.em-plot .tick {
+  fill: var(--fig-muted);
+  font-size: 11px;
+}
+.em-plot .label,
+.em-plot .legend {
+  fill: var(--fig-fg);
+  font-size: 12px;
+}
+
+.pg-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1.5rem;
+  transform: translateX(-50%);
+  padding: 0.55rem 1rem;
+  border-radius: 10px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 0.85rem;
+  max-width: 90vw;
+  overflow-wrap: anywhere;
+}
