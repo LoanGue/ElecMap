@@ -17,6 +17,7 @@
     "Literal transfer functions",
     "Equivalents",
     "Time domain",
+    "Sensitivities & tolerances",
     "Schematics",
     "Circuit JSON",
     "SPICE, units & LaTeX",
@@ -31,6 +32,7 @@
     "Transfer functions",
     "Impedances & equivalents",
     "Time domain",
+    "Sensitivities & tolerances",
     "Schematic",
     "*"
   ],

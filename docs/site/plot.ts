@@ -10,8 +10,20 @@ export interface Series {
   dashed?: boolean;
 }
 
+/** Filled area between two curves (a Monte-Carlo envelope). */
+export interface Band {
+  x: readonly number[];
+  lo: readonly number[];
+  hi: readonly number[];
+  label?: string;
+  /** Colour index of the series it belongs to (default 0). */
+  color?: number;
+}
+
 export interface Panel {
   series: Series[];
+  /** Areas drawn under the series. */
+  bands?: Band[];
   yLabel: string;
   yTicks?: number[];
   /** Logarithmic y axis (absolute values, one tick per decade). */
@@ -72,7 +84,10 @@ export function plot(options: PlotOptions): string {
   const pw = width - left - right;
   const height = top + options.panels.length * ph + (options.panels.length - 1) * gap + bottom;
 
-  const allX = options.panels.flatMap((p) => p.series.flatMap((s) => [...s.x]));
+  const allX = options.panels.flatMap((p) => [
+    ...p.series.flatMap((s) => [...s.x]),
+    ...(p.bands ?? []).flatMap((b) => [...b.x]),
+  ]);
   const xMin = Math.min(...allX);
   const xMax = Math.max(...allX);
   const tx = options.logX
@@ -92,7 +107,11 @@ export function plot(options: PlotOptions): string {
     const y0 = top + pi * (ph + gap);
     // A log axis plots log10|y|; its ticks are decades.
     const map = panel.logY ? (y: number) => Math.log10(Math.abs(y)) : (y: number) => y;
-    const ys = panel.series.flatMap((s) => s.y.map(map)).filter(Number.isFinite);
+    const bands = panel.bands ?? [];
+    const ys = [
+      ...panel.series.flatMap((s) => s.y.map(map)),
+      ...bands.flatMap((b) => [...b.lo.map(map), ...b.hi.map(map)]),
+    ].filter(Number.isFinite);
     let yMin = ys.length > 0 ? Math.min(...ys) : 0;
     let yMax = ys.length > 0 ? Math.max(...ys) : 1;
     if (panel.logY) {
@@ -134,6 +153,16 @@ export function plot(options: PlotOptions): string {
     parts.push(
       `<text class="label" transform="translate(14 ${y0 + ph / 2}) rotate(-90)" text-anchor="middle">${panel.yLabel}</text>`,
     );
+    for (const b of bands) {
+      const pts = [
+        ...b.x.map((x, i) => [x, b.hi[i] ?? NaN] as const),
+        ...b.x.map((x, i) => [x, b.lo[i] ?? NaN] as const).reverse(),
+      ].filter(([, y]) => Number.isFinite(map(y)));
+      const d = pts
+        .map(([x, y], i) => `${i === 0 ? "M" : "L"}${tx(x).toFixed(1)},${ty(y).toFixed(1)}`)
+        .join("");
+      parts.push(`<path d="${d}Z" class="band ${COLORS[(b.color ?? 0) % COLORS.length]}"/>`);
+    }
     panel.series.forEach((s, si) => {
       const d = s.x
         .map((x, i) => {
@@ -147,6 +176,16 @@ export function plot(options: PlotOptions): string {
       parts.push(`<path d="${d}" class="line ${COLORS[si % COLORS.length]}"${dash}/>`);
     });
     const labelled = panel.series.filter((s) => s.label);
+    bands
+      .filter((b) => b.label)
+      .forEach((b, i) => {
+        const lx = left + pw - 150;
+        const ly = y0 + 16 + (labelled.length + i) * 18;
+        parts.push(
+          `<rect x="${lx}" y="${ly - 6}" width="22" height="12" rx="2" class="band ${COLORS[(b.color ?? 0) % COLORS.length]}"/>`,
+          `<text class="legend" x="${lx + 28}" y="${ly}" dy="0.32em">${b.label ?? ""}</text>`,
+        );
+      });
     labelled.forEach((s, i) => {
       const si = panel.series.indexOf(s);
       const lx = left + pw - 150;

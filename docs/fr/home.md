@@ -49,6 +49,7 @@ Chaque guide est une suite de courts exemples exécutables, accompagnés de leur
 <a class="em-card" href="./diodes.md"><span class="em-icon">▷|</span><strong>Diodes</strong><span>Circuits non linéaires : redresseurs, régulateurs Zener, petits signaux.</span></a>
 <a class="em-card" href="./transistors.md"><span class="em-icon">⏚</span><strong>Transistors</strong><span>Bipolaires et MOSFET : polarisation, amplificateurs, logique CMOS.</span></a>
 <a class="em-card" href="./sensitivities.md"><span class="em-icon">∂</span><strong>Sensibilités</strong><span>Quel composant compte : dérivées, classement, stabilité de polarisation.</span></a>
+<a class="em-card" href="./tolerances.md"><span class="em-icon">±</span><strong>Tolérances</strong><span>Monte-Carlo : dispersion des composants réels, enveloppes de Bode, rendement.</span></a>
 <a class="em-card" href="./schematics.md"><span class="em-icon">✏️</span><strong>Schémas</strong><span>Dessins SVG automatiques, CEI ou ANSI, interactifs.</span></a>
 <a class="em-card" href="./format.md"><span class="em-icon">📄</span><strong>Netlists et JSON</strong><span>Syntaxe d'entrée, format JSON, erreurs de validation.</span></a>
 <a class="em-card" href="https://loangue.github.io/ElecMap/playground/?lang=fr"><span class="em-icon">▶</span><strong>Playground</strong><span>Écrivez une netlist ou dessinez le circuit avec des blocs dans le navigateur : schéma, Bode, transitoire, impédance.</span></a>

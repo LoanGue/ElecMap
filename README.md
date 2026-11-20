@@ -112,6 +112,7 @@ c.operatingPoint().nodeVoltages(); // { "0": 0, in: 5, out: 5 }
 c.power(); // DC power per component (W), sources negative
 c.sensitivity("out", "C1", { at: { freq: 1000 } }).normalized; // +1 % on C1 → −0.28 % on |V(out)|
 c.sensitivities("out"); // every component, ranked by influence
+c.monteCarlo({ tolerances: { R1: 0.05, C1: 0.1 }, runs: 200 }).bode("out"); // Bode envelope with 5 % / 10 % parts
 c.setValue("R1", 2200); // parametric changes, caches invalidated
 ```
 
@@ -241,7 +242,7 @@ Supported components: R, C, L, coupled inductors (K), independent V/I sources, t
 10. ✅ Symbolic transfer functions
 11. ✅ Documentation, examples, packaging checks
 12. First npm release (v0.1.0)
-13. Non-linear components: 🚧 diodes and Newton-Raphson ✅, BJT and MOSFET ✅, `.subckt` and `.param` ✅, sensitivities ✅
+13. Non-linear components: 🚧 diodes and Newton-Raphson ✅, BJT and MOSFET ✅, `.subckt` and `.param` ✅, sensitivities ✅, Monte-Carlo tolerances ✅
 
 ## Development
 

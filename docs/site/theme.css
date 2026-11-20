@@ -476,6 +476,34 @@ pre button {
 .em-plot .c5 {
   stroke: var(--fig-c5);
 }
+.em-plot .band {
+  stroke: none;
+  fill-opacity: 0.32;
+}
+.em-plot .band.c1 {
+  fill: var(--fig-c1);
+}
+.em-plot .band.c2 {
+  fill: var(--fig-c2);
+}
+.em-plot .band.c3 {
+  fill: var(--fig-c3);
+}
+.em-plot .bar.hist {
+  stroke: none;
+  fill-opacity: 0.8;
+}
+.em-plot .bar.hist.c1 {
+  fill: var(--fig-c1);
+}
+.em-plot .bar.hist.c2 {
+  fill: var(--fig-c2);
+}
+.em-plot .marker {
+  fill: none;
+  stroke-width: 1.6;
+  stroke-dasharray: 5 4;
+}
 .em-plot .bar {
   stroke: none;
 }

@@ -56,6 +56,91 @@ ${parts.join("\n")}
 </svg>`;
 }
 
+interface HistSet {
+  values: readonly number[];
+  label?: string;
+  /** Vertical dashed line (the nominal value). */
+  marker?: number;
+}
+
+/** Histogram of one or more sets of values, on shared bins. */
+function histogram(sets: HistSet[], xLabel: string, bins = 24, width = 640): string {
+  const left = 58;
+  const right = 16;
+  const top = 14;
+  const ph = 190;
+  const bottom = 42;
+  const pw = width - left - right;
+  const height = top + ph + bottom;
+  const all = sets.flatMap((s) => [...s.values]);
+  const lo = Math.min(...all);
+  const hi = Math.max(...all);
+  const step = (hi - lo) / bins || 1;
+  const counts = sets.map((s) => {
+    const c = new Array<number>(bins).fill(0);
+    for (const v of s.values) {
+      const k = Math.min(bins - 1, Math.floor((v - lo) / step));
+      c[k] = (c[k] ?? 0) + 1;
+    }
+    return c;
+  });
+  const yMax = Math.max(...counts.flat()) * 1.12;
+  const tx = (v: number) => left + ((v - lo) / (hi - lo || 1)) * pw;
+  const ty = (n: number) => top + ph - (n / yMax) * ph;
+  const parts: string[] = [
+    `<rect class="frame" x="${left}" y="${top}" width="${pw}" height="${ph}"/>`,
+  ];
+  for (const t of niceTicks(0, yMax, 4).filter((t) => t <= yMax)) {
+    const y = ty(t).toFixed(1);
+    parts.push(
+      `<line class="grid" x1="${left}" x2="${left + pw}" y1="${y}" y2="${y}"/>`,
+      `<text class="tick" x="${left - 6}" y="${y}" text-anchor="end" dy="0.32em">${fmt(t)}</text>`,
+    );
+  }
+  for (const t of niceTicks(lo, hi, 6).filter((t) => t >= lo && t <= hi)) {
+    const x = tx(t).toFixed(1);
+    parts.push(
+      `<line class="grid" x1="${x}" x2="${x}" y1="${top}" y2="${top + ph}"/>`,
+      `<text class="tick" x="${x}" y="${top + ph + 16}" text-anchor="middle">${fmt(t)}</text>`,
+    );
+  }
+  const bw = pw / bins / sets.length;
+  counts.forEach((c, si) => {
+    c.forEach((n, i) => {
+      if (n === 0) return;
+      const x = left + (i * pw) / bins + si * bw;
+      parts.push(
+        `<rect class="bar hist c${si + 1}" x="${(x + 0.5).toFixed(1)}" y="${ty(n).toFixed(1)}" width="${(bw - 1).toFixed(1)}" height="${(top + ph - ty(n)).toFixed(1)}" rx="1.5"/>`,
+      );
+    });
+  });
+  sets.forEach((s, si) => {
+    if (s.marker === undefined) return;
+    const x = tx(s.marker).toFixed(1);
+    parts.push(
+      `<line class="marker c${si + 1}" x1="${x}" x2="${x}" y1="${top}" y2="${top + ph}"/>`,
+    );
+  });
+  sets
+    .filter((s) => s.label)
+    .forEach((s, i) => {
+      const si = sets.indexOf(s);
+      const lx = left + pw - 190;
+      const ly = top + 16 + i * 18;
+      parts.push(
+        `<rect x="${lx}" y="${ly - 6}" width="22" height="12" rx="2" class="bar hist c${si + 1}"/>`,
+        `<text class="legend" x="${lx + 28}" y="${ly}" dy="0.32em">${s.label ?? ""}</text>`,
+      );
+    });
+  parts.push(
+    `<text class="label" transform="translate(14 ${top + ph / 2}) rotate(-90)" text-anchor="middle">runs</text>`,
+    `<text class="label" x="${left + pw / 2}" y="${height - 6}" text-anchor="middle">${xLabel}</text>`,
+  );
+  return `<svg xmlns="http://www.w3.org/2000/svg" class="em-plot" viewBox="0 0 ${width} ${height}" role="img">
+${parts.join("\n")}
+</svg>`;
+}
+
 const clampDb = (values: readonly number[]): number[] => values.map((v) => Math.max(v, -80));
 
 /** Writes every figure into `dir`. */
@@ -525,6 +610,104 @@ export function writeFigures(dir: string, lang: "en" | "fr" = "en"): void {
           },
         ],
       }),
+    );
+  }
+
+  // ---------------------------------------------------------------- tolerances
+  {
+    const runs = t("runs", "tirages");
+    const mc = rc.monteCarlo({ tolerances: { R1: 0.05, C1: 0.1 }, runs: 200 });
+    const fc = mc.statistics((c) => c.transferFunction("out").cutoffFrequency());
+    save(
+      "tolerance-fc.svg",
+      histogram(
+        [{ values: fc.values, marker: fc.nominal, label: t("R ±5 %, C ±10 %", "R ±5 %, C ±10 %") }],
+        t("Cut-off frequency (Hz)", "Fréquence de coupure (Hz)"),
+      ).replace(">runs<", `>${runs}<`),
+    );
+    const gauss = rc
+      .monteCarlo({ tolerances: { R1: 0.05, C1: 0.1 }, runs: 200, distribution: "gaussian" })
+      .statistics((c) => c.transferFunction("out").cutoffFrequency());
+    save(
+      "tolerance-distributions.svg",
+      histogram(
+        [
+          { values: fc.values, label: t("uniform", "uniforme") },
+          { values: gauss.values, label: t("gaussian (σ = t/3)", "gaussienne (σ = t/3)") },
+        ],
+        t("Cut-off frequency (Hz)", "Fréquence de coupure (Hz)"),
+        20,
+      ).replace(">runs<", `>${runs}<`),
+    );
+
+    const sk = new ElecMap(`
+  V1 in 0 AC 1
+  R1 in a 10k
+  R2 a b 10k
+  C1 a out 22n
+  C2 b 0 10n
+  XU b out out OPAMP
+  `);
+    const b = sk
+      .monteCarlo({ tolerances: { R1: 0.05, R2: 0.05, C1: 0.1, C2: 0.1 }, runs: 200 })
+      .bode("out", { fStart: 100, fStop: 10e3, points: 40 });
+    save(
+      "tolerance-bode.svg",
+      plot({
+        logX: true,
+        xLabel: t("Frequency (Hz)", "Fréquence (Hz)"),
+        panels: [
+          {
+            bands: [
+              {
+                x: b.freq,
+                lo: b.magnitudeDb.min,
+                hi: b.magnitudeDb.max,
+                label: t("200 runs", "200 tirages"),
+              },
+            ],
+            series: [{ x: b.freq, y: b.nominal.magnitudeDb, label: t("nominal", "nominal") }],
+            yLabel: t("Gain (dB)", "Gain (dB)"),
+          },
+          {
+            bands: [{ x: b.freq, lo: b.phase.min, hi: b.phase.max }],
+            series: [{ x: b.freq, y: b.nominal.phase }],
+            yLabel: t("Phase (°)", "Phase (°)"),
+            yTicks: [0, -45, -90, -135, -180],
+          },
+        ],
+      }),
+    );
+
+    const fixed = new ElecMap(`
+  VCC vcc 0 12
+  RB vcc b 1.2meg
+  RC vcc c 2.2k
+  Q1 c b e QN
+  VE e 0 0
+  .model QN NPN(BF=200 IS=1e-14)
+  `);
+    const ic = (c: ElecMap) =>
+      c
+        .monteCarlo({ tolerances: { "Q1.bf": 0.5 }, runs: 100 })
+        .statistics((x) => x.current("RC") * 1e3);
+    const a = ic(bias);
+    const f = ic(fixed);
+    const dev = (st: { nominal: number; values: number[] }) =>
+      st.values.map((v) => (v / st.nominal - 1) * 100);
+    save(
+      "tolerance-bias.svg",
+      histogram(
+        [
+          { values: dev(a), marker: 0, label: t("divider + RE", "pont + RE") },
+          { values: dev(f), label: t("fixed base current", "courant de base fixe") },
+        ],
+        t(
+          "Collector current, deviation from nominal (%), β = 200 ± 50 %",
+          "Courant collecteur, écart au nominal (%), β = 200 ± 50 %",
+        ),
+        25,
+      ).replace(">runs<", `>${runs}<`),
     );
   }
 }
