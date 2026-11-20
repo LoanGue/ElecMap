@@ -869,8 +869,8 @@ export class Editor {
       (g) => exact.y >= g.y - 0.3 && exact.y <= g.y + 1.8 && Math.abs(exact.x - g.x) < 0.8,
     );
     if (ground >= 0) return { kind: "ground", index: ground };
-    const part = (e.target as Element).closest?.<SVGElement>("g[data-id]");
-    const id = part?.dataset["id"];
+    const part = (e.target as Element).closest?.<SVGElement>("g[data-id], [data-hit]");
+    const id = part?.dataset["id"] ?? part?.dataset["hit"];
     if (id && d.parts.some((p) => p.id === id)) return { kind: "part", id };
     let best = -1;
     let dist = 0.35;

@@ -381,11 +381,52 @@ function drawSchematic(): void {
 function highlight(): void {
   const svg = document.querySelector("#pg-schematic svg");
   if (svg) decorate(svg);
-  const drawn = document.querySelector("#pg-editor svg");
+  const drawn = document.querySelector("#pg-editor .ed-canvas svg");
   if (drawn) decorate(drawn);
 }
 
+/**
+ * Clickable boxes around the components, in a layer under the wires: a click
+ * anywhere in a component's box selects it, and the wires stay clickable.
+ */
+function addHitBoxes(svg: Element): void {
+  if (svg.querySelector(".pg-hits")) return;
+  const NS = "http://www.w3.org/2000/svg";
+  const layer = document.createElementNS(NS, "g");
+  layer.setAttribute("class", "pg-hits");
+  for (const g of svg.querySelectorAll<SVGGElement>("g[data-id]")) {
+    const id = g.dataset["id"] ?? "";
+    if (id.startsWith("__")) continue;
+    const b = g.getBBox();
+    // Not laid out yet (hidden): try again on the next decoration.
+    if (b.width === 0 && b.height === 0) return;
+    const pad = 5;
+    const rect = document.createElementNS(NS, "rect");
+    rect.setAttribute("class", "pg-hit");
+    rect.setAttribute("data-hit", id);
+    rect.setAttribute("x", String(b.x - pad));
+    rect.setAttribute("y", String(b.y - pad));
+    rect.setAttribute("width", String(b.width + 2 * pad));
+    rect.setAttribute("height", String(b.height + 2 * pad));
+    rect.setAttribute("rx", "6");
+    layer.append(rect);
+  }
+  // Right after the background (and the editor's grid), before the wires.
+  const anchor = svg.querySelector(".ed-grid") ?? svg.querySelector(".bg");
+  if (anchor) anchor.after(layer);
+  else svg.prepend(layer);
+  // The box lights up while the pointer is over the component or its box.
+  const hover = (e: Event, on: boolean) => {
+    const el = (e.target as Element).closest<SVGElement>("g[data-id], [data-hit]");
+    const id = el?.dataset["id"] ?? el?.dataset["hit"];
+    if (id) layer.querySelector(`[data-hit="${CSS.escape(id)}"]`)?.classList.toggle("hover", on);
+  };
+  svg.addEventListener("pointerover", (e) => hover(e, true));
+  svg.addEventListener("pointerout", (e) => hover(e, false));
+}
+
 function decorate(svg: Element): void {
+  addHitBoxes(svg);
   const nodes = new Set<string>();
   if (state.tab === "transfer" && state.outKind === "voltage") {
     nodes.add(state.output);
@@ -403,14 +444,17 @@ function decorate(svg: Element): void {
   for (const el of svg.querySelectorAll<SVGElement>("g[data-id]")) {
     el.classList.toggle("hl", parts.has(el.dataset["id"] ?? ""));
   }
+  for (const el of svg.querySelectorAll<SVGElement>("[data-hit]")) {
+    el.classList.toggle("hl", parts.has(el.dataset["hit"] ?? ""));
+  }
 }
 
 function onSchematicClick(event: MouseEvent): void {
   const target = event.target as Element;
   const wire = target.closest<SVGElement>("[data-node]");
-  const part = target.closest<SVGElement>("g[data-id]");
+  const part = target.closest<SVGElement>("g[data-id], [data-hit]");
   if (wire) probe("node", wire.dataset["node"] ?? "");
-  else if (part) probe("part", part.dataset["id"] ?? "");
+  else if (part) probe("part", part.dataset["id"] ?? part.dataset["hit"] ?? "");
 }
 
 /** A node or a component was clicked: probe it in the current tab. */
@@ -1087,6 +1131,8 @@ function applyMode(): void {
     b.classList.toggle("on", b.dataset["mode"] === state.mode);
     b.setAttribute("aria-pressed", String(b.dataset["mode"] === state.mode));
   }
+  // Boxes of a view that was hidden could not be measured.
+  highlight();
 }
 
 function wire(): void {
