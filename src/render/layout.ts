@@ -127,6 +127,8 @@ export function valueText(c: ComponentJSON): string {
       return `${c.gain}·I(${c.controlSource})`;
     case "ccvs":
       return `${formatSI(c.gain, "Ω")}·I(${c.controlSource})`;
+    case "bsource":
+      return `${c.kind === "voltage" ? "V" : "I"} = ${c.expression}`;
     case "opamp":
       return c.gain === undefined
         ? ""

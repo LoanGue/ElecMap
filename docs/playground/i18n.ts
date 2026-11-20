@@ -119,6 +119,7 @@ const en = {
     diode: "diode",
     bjt: "BJT",
     mosfet: "MOSFET",
+    bsource: "behavioural source",
   } as Record<string, string>,
   editor: {
     text: "Text",
@@ -164,6 +165,7 @@ const en = {
       pnp: "PNP",
       nmos: "NMOS",
       pmos: "PMOS",
+      bsource: "Behavioural source",
     } as Record<string, string>,
     valueHints: {
       resistor: "e.g. 4.7k",
@@ -182,6 +184,7 @@ const en = {
       vccs: "control nodes and gm: a b 1m",
       cccs: "control source and gain: V1 2",
       ccvs: "control source and r: V1 1k",
+      bsource: "V=… or I=…, e.g. V=V(a)*V(b), I=1m*tanh(V(in)/26m)",
     } as Record<string, string>,
   },
   error: "Error",
@@ -307,6 +310,7 @@ const fr: Strings = {
     diode: "diode",
     bjt: "bipolaire",
     mosfet: "MOSFET",
+    bsource: "source comportementale",
   },
   editor: {
     text: "Texte",
@@ -355,6 +359,7 @@ const fr: Strings = {
       pnp: "PNP",
       nmos: "NMOS",
       pmos: "PMOS",
+      bsource: "Source comportementale",
     },
     valueHints: {
       resistor: "ex. 4.7k",
@@ -373,6 +378,7 @@ const fr: Strings = {
       vccs: "nœuds de commande et gm : a b 1m",
       cccs: "source de commande et gain : V1 2",
       ccvs: "source de commande et r : V1 1k",
+      bsource: "V=… ou I=…, p. ex. V=V(a)*V(b), I=1m*tanh(V(in)/26m)",
     },
   },
   error: "Erreur",

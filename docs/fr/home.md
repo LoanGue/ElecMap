@@ -48,6 +48,7 @@ Chaque guide est une suite de courts exemples exécutables, accompagnés de leur
 <a class="em-card" href="./time-domain.md"><span class="em-icon">⏱</span><strong>Domaine temporel</strong><span>Réponses indicielle et impulsionnelle, simulation transitoire.</span></a>
 <a class="em-card" href="./diodes.md"><span class="em-icon">▷|</span><strong>Diodes</strong><span>Circuits non linéaires : redresseurs, régulateurs Zener, petits signaux.</span></a>
 <a class="em-card" href="./transistors.md"><span class="em-icon">⏚</span><strong>Transistors</strong><span>Bipolaires et MOSFET : polarisation, amplificateurs, logique CMOS.</span></a>
+<a class="em-card" href="./behavioral-sources.md"><span class="em-icon">ƒ</span><strong>Sources comportementales</strong><span>Sources B : toute expression des tensions, courants et du temps.</span></a>
 <a class="em-card" href="./sensitivities.md"><span class="em-icon">∂</span><strong>Sensibilités</strong><span>Quel composant compte : dérivées, classement, stabilité de polarisation.</span></a>
 <a class="em-card" href="./tolerances.md"><span class="em-icon">±</span><strong>Tolérances</strong><span>Monte-Carlo : dispersion des composants réels, enveloppes de Bode, rendement.</span></a>
 <a class="em-card" href="./schematics.md"><span class="em-icon">✏️</span><strong>Schémas</strong><span>Dessins SVG automatiques, CEI ou ANSI, interactifs.</span></a>
@@ -67,4 +68,4 @@ Chaque guide est une suite de courts exemples exécutables, accompagnés de leur
 | la réponse au cours du temps                              | {@link TransferFunction.stepResponse}, {@link ElecMap.transient}                                        |
 | un dessin                                                 | {@link ElecMap.toSVG}                                                                                   |
 
-ElecMap n'a **aucune dépendance à l'exécution**, est distribué en ESM + CommonJS avec des types complets, et fonctionne sous Node.js ≥ 18 et dans les navigateurs. Composants : R, L, C, bobines couplées, sources de tension et de courant, sources commandées (E, F, G, H), amplificateurs opérationnels (idéal, gain fini, GBW), interrupteurs, diodes / diodes Zener, transistors bipolaires et MOSFET avec cartes `.model` SPICE.
+ElecMap n'a **aucune dépendance à l'exécution**, est distribué en ESM + CommonJS avec des types complets, et fonctionne sous Node.js ≥ 18 et dans les navigateurs. Composants : R, L, C, bobines couplées, sources de tension et de courant, sources commandées (E, F, G, H), amplificateurs opérationnels (idéal, gain fini, GBW), interrupteurs, diodes / diodes Zener, transistors bipolaires et MOSFET avec cartes `.model` SPICE, sources comportementales (B).

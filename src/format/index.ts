@@ -9,5 +9,6 @@ export { CIRCUIT_FORMATS } from "./exchange";
 export type { CircuitFormat, FormatOutput } from "./exchange";
 export type { ComponentSpec, NumberConstraint } from "./catalog";
 export { CIRCUIT_SCHEMA } from "./schema";
+export { EXPRESSION_FUNCTIONS } from "./expression";
 export { latexNumber, polynomialToLatex } from "./latex";
 export type { LatexNumberOptions, LatexPolynomialOptions } from "./latex";

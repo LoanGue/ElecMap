@@ -47,7 +47,7 @@ c.toSVG(); // standalone <svg> schematic
 | Time domain    | Exact step/impulse/arbitrary-input responses of H(s); transient simulation (trapezoidal, Gear-2, Euler)                                                             |
 | Schematics     | Automatic SVG layout and routing, IEC or ANSI symbols, light/dark themes, interactive `data-*` attributes                                                           |
 
-Components: R, L, C, coupled inductors / transformers, independent V and I sources (DC, AC, sine, pulse, PWL, exp), the four controlled sources (E, F, G, H), op-amps (ideal, finite gain, single-pole GBW), fixed-state switches, diodes / Zener diodes, bipolar transistors (Ebers-Moll) and MOSFETs (level 1) with SPICE `.model` cards, solved by Newton-Raphson (see the [diodes](./docs/en/diodes.md) and [transistors](./docs/en/transistors.md) guides).
+Components: R, L, C, coupled inductors / transformers, independent V and I sources (DC, AC, sine, pulse, PWL, exp), the four controlled sources (E, F, G, H), op-amps (ideal, finite gain, single-pole GBW), fixed-state switches, diodes / Zener diodes, bipolar transistors (Ebers-Moll) and MOSFETs (level 1) with SPICE `.model` cards, behavioural sources (`B1 out 0 V=V(a)*V(b)`), solved by Newton-Raphson (see the [diodes](./docs/en/diodes.md), [transistors](./docs/en/transistors.md) and [behavioural sources](./docs/en/behavioral-sources.md) guides).
 
 ## Examples
 
@@ -218,7 +218,7 @@ c.layout(); // the placement itself: components, pins, wire segments, junctions,
 
 The layout is computed from scratch, without any external library: nodes are ordered into columns from the source to the output, shunt elements hang vertically to individual ground symbols, series elements run horizontally and feedback branches go above; wires are then routed on a grid by an A* maze router that forbids overlaps and only allows perpendicular crossings. Every element carries `data-id` / `data-node` / `data-type` attributes so a host page can make the drawing interactive. Details in [algorithms](./docs/en/algorithms.md#schematic-layout).
 
-Supported components: R, C, L, coupled inductors (K), independent V/I sources, the four controlled sources (E, G, F, H), op-amps (ideal, finite gain, single-pole GBW), fixed-state switches, diodes (D), bipolar transistors (Q) and MOSFETs (M), with `.model` cards. See [algorithms](./docs/en/algorithms.md#modified-nodal-analysis) for how they are stamped.
+Supported components: R, C, L, coupled inductors (K), independent V/I sources, the four controlled sources (E, G, F, H), op-amps (ideal, finite gain, single-pole GBW), fixed-state switches, diodes (D), bipolar transistors (Q) and MOSFETs (M), with `.model` cards, and behavioural sources (B). See [algorithms](./docs/en/algorithms.md#modified-nodal-analysis) for how they are stamped.
 
 ## Limitations
 
@@ -242,7 +242,7 @@ Supported components: R, C, L, coupled inductors (K), independent V/I sources, t
 10. ✅ Symbolic transfer functions
 11. ✅ Documentation, examples, packaging checks
 12. First npm release (v0.1.0)
-13. Non-linear components: 🚧 diodes and Newton-Raphson ✅, BJT and MOSFET ✅, `.subckt` and `.param` ✅, sensitivities ✅, Monte-Carlo tolerances ✅
+13. Non-linear components: 🚧 diodes and Newton-Raphson ✅, BJT and MOSFET ✅, `.subckt` and `.param` ✅, sensitivities ✅, Monte-Carlo tolerances ✅, behavioural sources ✅
 
 ## Development
 

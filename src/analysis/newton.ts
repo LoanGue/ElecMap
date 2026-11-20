@@ -39,6 +39,8 @@ export function newtonSolve(
   initial = false,
   /** Coefficient of the junction charges in the equation (transient steps), none in DC. */
   charge?: number,
+  /** Time of the solve (behavioural sources' `time`), 0 in DC. */
+  time = 0,
 ): { x: number[]; iterations: number } | undefined {
   const maxIterations = options.maxIterations ?? 100;
   const reltol = options.reltol ?? 1e-3;
@@ -48,7 +50,7 @@ export function newtonSolve(
   for (let it = 1; it <= maxIterations; it++) {
     const M = A.map((row) => [...row]);
     const b = [...r];
-    const limited = system.load(M, b, x, states, DEVICE_GMIN, initial && it === 1, charge);
+    const limited = system.load(M, b, x, states, DEVICE_GMIN, initial && it === 1, charge, time);
     let next: number[];
     try {
       next = new RealLU(M, 0).solve(b);
@@ -71,7 +73,7 @@ export function newtonSolve(
       // the result is then accurate far below the tolerances.
       const M2 = A.map((row) => [...row]);
       const b2 = [...r];
-      system.load(M2, b2, x, states, DEVICE_GMIN, false, charge);
+      system.load(M2, b2, x, states, DEVICE_GMIN, false, charge, time);
       try {
         const polished = new RealLU(M2, 0).solve(b2);
         if (polished.every(Number.isFinite)) x = polished;

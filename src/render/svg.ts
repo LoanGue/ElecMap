@@ -96,6 +96,10 @@ function twoTerminalBody(c: PlacedComponent, style: "iec" | "ansi"): string {
     case "vccs":
     case "cccs":
       return path("M0 0H24M56 0H80M24 0L40 -16L56 0L40 16ZM31 0H49M43 -5L49 0L43 5");
+    case "bsource":
+      return comp.kind === "voltage"
+        ? path("M0 0H24M56 0H80M24 0L40 -16L56 0L40 16Z")
+        : path("M0 0H24M56 0H80M24 0L40 -16L56 0L40 16ZM31 0H49M43 -5L49 0L43 5");
     case "switch":
       return (
         path(comp.closed ? "M0 0H26M54 0H80M26 0L54 -3" : "M0 0H26M54 0H80M26 0L51 -14") +
@@ -120,7 +124,12 @@ function polarity(
   u: number,
 ): string {
   const t = c.component.type;
-  if (t !== "vsource" && t !== "vcvs" && t !== "ccvs") return "";
+  const voltage =
+    t === "vsource" ||
+    t === "vcvs" ||
+    t === "ccvs" ||
+    (c.component.type === "bsource" && c.component.kind === "voltage");
+  if (!voltage) return "";
   const [p0, p1] = c.pins as [PlacedComponent["pins"][0], PlacedComponent["pins"][0]];
   const at = (f: number) => [px(p0.x + (p1.x - p0.x) * f), py(p0.y + (p1.y - p0.y) * f)] as const;
   const m = 0.15 * u;

@@ -147,6 +147,8 @@ pre,
 .tsd-signature,
 .tsd-kind-icon {
   font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  /* Code shows what to type: "<=" stays two characters, not "≤". */
+  font-variant-ligatures: none;
 }
 
 /* Inline code. */

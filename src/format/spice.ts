@@ -14,6 +14,7 @@
  * | `Gname n+ n- nc+ nc- gm` | VCCS |
  * | `Fname n+ n- Vctrl gain` | CCCS |
  * | `Hname n+ n- Vctrl r` | CCVS |
+ * | `Bname n+ n- V=expression` / `I=expression` | behavioural source |
  * | `Kname L1 L2 k` | coupled inductors |
  * | `Xname in+ in- out OPAMP [GAIN=a] [GBW=f]` | op-amp (ElecMap extension) |
  * | `Sname n1 n2 ON\|OFF [RON=r] [ROFF=r]` | fixed switch (ElecMap extension) |
@@ -58,6 +59,7 @@ import type {
   Waveform,
 } from "./types";
 import { FORMAT_VERSION } from "./types";
+import { formatExpression, parseExpression, renameProbes, resolveParameters } from "./expression";
 import { formatSpice, parseValue } from "./units";
 import { evaluate } from "./expression";
 import { GROUND_ALIASES } from "./validate";
@@ -601,12 +603,44 @@ function elementLetter(id: string): string | undefined {
   return id.slice(id.lastIndexOf(".") + 1)[0]?.toUpperCase();
 }
 
+/**
+ * `Bname n+ n- V=expression` or `I=expression` (braces optional). Parameters
+ * are replaced by their values; probes and `time` stay.
+ */
+function parseBehavioral(
+  text: string,
+  line: number,
+  params: ReadonlyMap<string, number>,
+): ComponentJSON {
+  const m = /^(\S+) (\S+) (\S+) ([VI])\s*=\s*(.+)$/i.exec(text);
+  if (!m)
+    fail(`${text.split(" ")[0] ?? "B"}: expected "B… n+ n- V=expression" or "I=expression"`, line);
+  const [, id, p, n, kind, raw] = m as unknown as [string, string, string, string, string, string];
+  let src = raw.trim();
+  if (src.startsWith("{") && src.endsWith("}")) src = src.slice(1, -1);
+  // Inner braces ("{IS}") are plain parentheses: parameters are resolved anyway.
+  src = src.replace(/\{/g, "(").replace(/\}/g, ")");
+  const err = (msg: string): never => fail(`${id}: ${msg}`, line);
+  const tree = parseExpression(src, err, { probes: true });
+  const resolved = resolveParameters(tree, params, (msg) => err(`in "${src}": ${msg}`), ["TIME"]);
+  return {
+    id,
+    type: "bsource",
+    nodes: [p, n],
+    kind: kind.toUpperCase() === "V" ? "voltage" : "current",
+    expression: formatExpression(resolved),
+  };
+}
+
 function parseElement(
   text: string,
   line: number,
   models: Models = new Map(),
   warnings: string[] = [],
+  scopeParams: ReadonlyMap<string, number> = new Map(),
 ): ComponentJSON {
+  if (elementLetter(text.split(" ")[0] ?? "") === "B")
+    return parseBehavioral(text, line, scopeParams);
   const tokens = tokenize(text, line);
   const first = tokens.shift();
   if (first?.kind !== "word") fail("expected an element name", line);
@@ -775,13 +809,25 @@ function relocate(c: ComponentJSON, scope: Scope): ComponentJSON {
   if ("control" in c) r.control = c.control.map(scope.node);
   if ("controlSource" in c) r.controlSource = scope.prefix + c.controlSource;
   if ("inductors" in c) r.inductors = c.inductors.map((i) => scope.prefix + i);
+  if (c.type === "bsource") {
+    const tree = parseExpression(
+      c.expression,
+      (m) => {
+        throw new ElecMapError("PARSE_ERROR", m);
+      },
+      { probes: true },
+    );
+    r.expression = formatExpression(renameProbes(tree, scope.node, (id) => scope.prefix + id));
+  }
   return r;
 }
 
 /** Expands the element lines of a scope into `out`. */
 function expand(lines: Line[], scope: Scope, ctx: Context, out: ComponentJSON[]): void {
   for (const l of lines) {
-    const text = substitute(l.text, scope.params, l.line);
+    const behavioral = elementLetter(l.text.split(" ")[0] ?? "") === "B";
+    // A behavioural expression is parsed as a whole: its braces are not substituted.
+    const text = behavioral ? l.text : substitute(l.text, scope.params, l.line);
     if (text.startsWith(".")) {
       // Only local directives reach here (top-level ones are handled by parseSpice).
       const [directive, ...rest] = text.split(" ");
@@ -805,7 +851,7 @@ function expand(lines: Line[], scope: Scope, ctx: Context, out: ComponentJSON[])
         continue;
       }
     }
-    out.push(relocate(parseElement(text, l.line, ctx.models, ctx.warnings), scope));
+    out.push(relocate(parseElement(text, l.line, ctx.models, ctx.warnings, scope.params), scope));
   }
 }
 
@@ -1082,6 +1128,8 @@ export function componentToSpice(
       return `${c.id} ${c.nodes.join(" ")} ${c.controlSource} ${formatSpice(c.gain)}`;
     case "coupling":
       return `${c.id} ${c.inductors.join(" ")} ${formatSpice(c.k)}`;
+    case "bsource":
+      return `${c.id} ${c.nodes.join(" ")} ${c.kind === "voltage" ? "V" : "I"}=${c.expression}`;
     case "opamp":
       return [
         c.id,

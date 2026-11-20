@@ -52,6 +52,7 @@ Exemples : `1k`, `4.7u`, `100nF`, `1e-3`, `2MEG`. La notation européenne est é
 | `Gname n+ n- nc+ nc- gm`                     | source de courant commandée en tension                                   |
 | `Fname n+ n- Vctrl gain`                     | source de courant commandée en courant                                   |
 | `Hname n+ n- Vctrl r`                        | source de tension commandée en courant                                   |
+| `Bname n+ n- V=expr` / `I=expr`              | source comportementale (voir [guide](./behavioral-sources.md))           |
 | `Kname L1 L2 k`                              | bobines couplées, `0 < k ≤ 1`                                            |
 | `Xname in+ in- out OPAMP [GAIN=a] [GBW=f]`   | amplificateur opérationnel _(extension ElecMap)_                         |
 | `Xname node… NAME [K=v…]`                    | instance de sous-circuit (voir [plus bas](#sous-circuits-et-paramètres)) |

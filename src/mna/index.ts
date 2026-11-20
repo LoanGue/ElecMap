@@ -14,3 +14,4 @@ export type {
   Terminal,
 } from "./models";
 export type { Charge } from "./devices";
+export type { ProbeForm } from "./behavioral";

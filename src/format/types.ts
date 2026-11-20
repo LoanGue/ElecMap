@@ -172,6 +172,27 @@ export interface CcvsJSON extends ComponentBase {
 }
 
 /**
+ * Behavioural source (SPICE `B`): a voltage `V(p,n)` or a current `I(p→n)`
+ * given by an expression of the circuit's voltages and currents, e.g.
+ * `"V(in)^2 / 2"`, `"1m * tanh(V(a,b) / 26m)"`, `"V(ctrl) * I(Vsense)"`.
+ *
+ * The expression may use the probes `V(node)`, `V(a,b)` and `I(id)` (current of
+ * a component without capacitance, e.g. a voltage source, an inductor, a resistor),
+ * the time `time` (s, 0 outside transient analysis), numbers with SPICE suffixes,
+ * `pi`, `e`, the operators `+ - * / ^`, comparisons and the functions of
+ * {@link EXPRESSION_FUNCTIONS}. It is solved by Newton-Raphson, and linearised
+ * at the operating point in small-signal analyses.
+ */
+export interface BehavioralSourceJSON extends ComponentBase {
+  type: "bsource";
+  /** `[positive, negative]` nodes. */
+  nodes: [NodeName, NodeName];
+  /** `"voltage"`: `V(p) − V(n) = expression`; `"current"`: `expression` flows from `p` to `n` through the source. */
+  kind: "voltage" | "current";
+  expression: string;
+}
+
+/**
  * Operational amplifier, `nodes = [non-inverting, inverting, output]`, output referenced to ground.
  * Ideal (virtual short) when `gain` is omitted; otherwise a finite open-loop
  * gain, with an optional gain-bandwidth product `gbw` (Hz) giving a single-pole model.
@@ -340,6 +361,7 @@ export type ComponentJSON =
   | VccsJSON
   | CccsJSON
   | CcvsJSON
+  | BehavioralSourceJSON
   | OpAmpJSON
   | CouplingJSON
   | SwitchJSON

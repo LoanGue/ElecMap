@@ -32,7 +32,8 @@ export type Kind =
   | "vcvs"
   | "vccs"
   | "cccs"
-  | "ccvs";
+  | "ccvs"
+  | "bsource";
 
 export interface Part {
   id: string;
@@ -95,6 +96,7 @@ const PREFIX: Record<Kind, string> = {
   vccs: "G",
   cccs: "F",
   ccvs: "H",
+  bsource: "B",
 };
 
 const DEFAULT_VALUE: Partial<Record<Kind, string>> = {
@@ -108,6 +110,7 @@ const DEFAULT_VALUE: Partial<Record<Kind, string>> = {
   pnp: "PNP",
   nmos: "NMOS",
   pmos: "PMOS",
+  bsource: "V=5*sin(2*pi*1k*time)",
 };
 
 /** Components offered in the palette, in order. */
@@ -120,6 +123,7 @@ export const PALETTE: Kind[] = [
   "diode",
   "switch",
   "opamp",
+  "bsource",
   "npn",
   "pnp",
   "nmos",
@@ -138,6 +142,7 @@ const TWO_TERMINAL = new Set<Kind>([
   "vccs",
   "cccs",
   "ccvs",
+  "bsource",
 ]);
 
 const DIRS: Record<Orientation, [number, number]> = {
@@ -455,6 +460,10 @@ function stub(p: Part, nodes: string[]): ComponentJSON {
     c["polarity"] = p.kind;
   if (p.kind === "vsource" || p.kind === "isource") c["dc"] = 1;
   if (p.kind === "switch") c["closed"] = !/off/i.test(p.value);
+  if (p.kind === "bsource") {
+    c["kind"] = /^\s*i/i.test(p.value) ? "current" : "voltage";
+    c["expression"] = "";
+  }
   if (p.kind === "nmos" || p.kind === "pmos") (c["nodes"] as string[]).push(nodes[2] as string);
   return c as unknown as ComponentJSON;
 }

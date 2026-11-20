@@ -154,6 +154,11 @@ export const CIRCUIT_SCHEMA = {
             controlSource: { type: "string" },
             gain: finite,
           }),
+          component("bsource", ["nodes", "kind", "expression"], {
+            nodes: twoNodes,
+            kind: { enum: ["voltage", "current"] },
+            expression: { type: "string", minLength: 1 },
+          }),
           component("opamp", ["nodes"], {
             nodes: { type: "array", items: node, minItems: 3, maxItems: 3 },
             gain: positive,

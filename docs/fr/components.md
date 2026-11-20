@@ -62,3 +62,11 @@ Le courant de commande de `cccs` / `ccvs` est le courant qui traverse une source
 - **MOSFET :** niveau 1 de SPICE (Shichman-Hodges) avec modulation de longueur de canal et effet de substrat, symétrique entre drain et source. `current("M1")` est le courant de drain ; la grille et le substrat n'en consomment pas.
 
 Voir le [guide des transistors](./transistors.md).
+
+## Sources comportementales
+
+| Type      | SPICE                  | `nodes`  | Champs                                            |
+| --------- | ---------------------- | -------- | ------------------------------------------------- |
+| `bsource` | `B… V=expr` / `I=expr` | `[p, n]` | `kind` (`"voltage"` ou `"current"`), `expression` |
+
+- **Source comportementale :** une tension `V(p) − V(n)` ou un courant (de `p` vers `n` à travers la source) donné par une expression de `V(a)`, `V(a,b)`, `I(id)` et `time`. Le circuit est non linéaire ; les analyses petit signal utilisent l'expression linéarisée au point de repos. Voir le [guide des sources comportementales](./behavioral-sources.md).

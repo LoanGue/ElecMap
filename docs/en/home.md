@@ -48,6 +48,7 @@ Every guide is a series of short, runnable examples with their real output.
 <a class="em-card" href="./time-domain.md"><span class="em-icon">⏱</span><strong>Time domain</strong><span>Step and impulse responses, transient simulation.</span></a>
 <a class="em-card" href="./diodes.md"><span class="em-icon">▷|</span><strong>Diodes</strong><span>Non-linear circuits: rectifiers, Zener regulators, small signal.</span></a>
 <a class="em-card" href="./transistors.md"><span class="em-icon">⏚</span><strong>Transistors</strong><span>BJT and MOSFET: bias points, amplifiers, CMOS logic.</span></a>
+<a class="em-card" href="./behavioral-sources.md"><span class="em-icon">ƒ</span><strong>Behavioural sources</strong><span>B sources: any expression of voltages, currents and time.</span></a>
 <a class="em-card" href="./sensitivities.md"><span class="em-icon">∂</span><strong>Sensitivities</strong><span>Which component matters: derivatives, ranking, bias stability.</span></a>
 <a class="em-card" href="./tolerances.md"><span class="em-icon">±</span><strong>Tolerances</strong><span>Monte-Carlo: spread of real components, Bode envelopes, yield.</span></a>
 <a class="em-card" href="./schematics.md"><span class="em-icon">✏️</span><strong>Schematics</strong><span>Automatic SVG drawings, IEC or ANSI, interactive.</span></a>
@@ -67,4 +68,4 @@ Every guide is a series of short, runnable examples with their real output.
 | the response over time               | {@link TransferFunction.stepResponse}, {@link ElecMap.transient}                                        |
 | a drawing                            | {@link ElecMap.toSVG}                                                                                   |
 
-ElecMap has **no runtime dependencies**, ships ESM + CommonJS with full types, and runs in Node.js ≥ 18 and in browsers. Components: R, L, C, coupled inductors, V and I sources, controlled sources (E, F, G, H), op-amps (ideal, finite gain, GBW), switches, diodes / Zener diodes, bipolar transistors and MOSFETs with SPICE `.model` cards.
+ElecMap has **no runtime dependencies**, ships ESM + CommonJS with full types, and runs in Node.js ≥ 18 and in browsers. Components: R, L, C, coupled inductors, V and I sources, controlled sources (E, F, G, H), op-amps (ideal, finite gain, GBW), switches, diodes / Zener diodes, bipolar transistors and MOSFETs with SPICE `.model` cards, behavioural sources (B).
