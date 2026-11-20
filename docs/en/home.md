@@ -51,7 +51,7 @@ Every guide is a series of short, runnable examples with their real output.
 <a class="em-card" href="./sensitivities.md"><span class="em-icon">∂</span><strong>Sensitivities</strong><span>Which component matters: derivatives, ranking, bias stability.</span></a>
 <a class="em-card" href="./schematics.md"><span class="em-icon">✏️</span><strong>Schematics</strong><span>Automatic SVG drawings, IEC or ANSI, interactive.</span></a>
 <a class="em-card" href="./format.md"><span class="em-icon">📄</span><strong>Netlists & JSON</strong><span>Input syntax, JSON format, validation errors.</span></a>
-<a class="em-card" href="https://loangue.github.io/ElecMap/playground/"><span class="em-icon">▶</span><strong>Playground</strong><span>Edit a netlist in the browser: schematic, Bode plot, transient, impedance.</span></a>
+<a class="em-card" href="https://loangue.github.io/ElecMap/playground/"><span class="em-icon">▶</span><strong>Playground</strong><span>Write a netlist or draw the circuit with blocks in the browser: schematic, Bode plot, transient, impedance.</span></a>
 </div>
 
 ## What's inside

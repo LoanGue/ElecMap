@@ -6,6 +6,8 @@ import { ElecMap, ElecMapError, formatSI } from "../../src";
 import type { Complex, ComponentJSON, OutputSpec, TransferFunction } from "../../src";
 import { plot } from "../site/plot";
 import type { Panel, Series } from "../site/plot";
+import { Editor, emptyDrawing, fromCircuit } from "./editor";
+import type { Drawing } from "./editor";
 import { EXAMPLES } from "./examples";
 import type { Tab } from "./examples";
 import { STRINGS } from "./i18n";
@@ -37,6 +39,8 @@ interface State {
   zB: string;
   /** Schematic. */
   style: "iec" | "ansi";
+  /** Input: netlist text or block drawing. */
+  mode: "text" | "draw";
 }
 
 const first = EXAMPLES[0] as (typeof EXAMPLES)[0];
@@ -59,6 +63,7 @@ const state: State = {
   zA: "",
   zB: "",
   style: "iec",
+  mode: "text",
 };
 
 const params = new URLSearchParams(location.search);
@@ -74,6 +79,9 @@ document.documentElement.lang = lang;
 let circuit: ElecMap | undefined;
 let ground = "0";
 let selected: string | undefined;
+/** Block editor, and the netlist it last generated (the drawing is up to date when they match). */
+let blocks: Editor | undefined;
+let drawnNetlist: string | undefined;
 
 // --------------------------------------------------------------- helpers
 
@@ -233,19 +241,31 @@ function shell(): void {
 </header>
 <main class="pg-main">
   <section class="pg-left">
-    <div class="pg-card">
+    <div class="pg-card" id="pg-draw-card" hidden>
+      <div class="pg-card-head">
+        <h2>${t.editor.draw}</h2>
+        ${modeSwitch()}
+      </div>
+      <div id="pg-editor" class="ed"></div>
+      <details class="pg-directives">
+        <summary>${t.editor.directives}</summary>
+        <textarea id="pg-directives" spellcheck="false" autocomplete="off" aria-label="${t.editor.directives}"></textarea>
+      </details>
+    </div>
+    <div class="pg-card" id="pg-netlist-card">
       <div class="pg-card-head">
         <h2>${t.netlist}</h2>
+        ${modeSwitch()}
         <select id="pg-example" aria-label="${t.examples}">
           <option value="">${t.examples}…</option>
           ${EXAMPLES.map((e) => `<option value="${e.id}">${esc(e.name[lang])}</option>`).join("")}
         </select>
       </div>
       <textarea id="pg-netlist" spellcheck="false" autocomplete="off" aria-label="${t.netlist}"></textarea>
-      <p class="pg-hint">${t.netlistHint}</p>
+      <p class="pg-hint" id="pg-netlist-hint">${t.netlistHint}</p>
       <div id="pg-status"></div>
     </div>
-    <div class="pg-card">
+    <div class="pg-card" id="pg-schematic-card">
       <div class="pg-card-head">
         <h2>${t.schematic}</h2>
         <div class="pg-tools">
@@ -275,6 +295,12 @@ function shell(): void {
   applyTheme();
 }
 
+function modeSwitch(): string {
+  return `<div class="pg-seg pg-mode" role="group" aria-label="${t.editor.text} / ${t.editor.draw}">
+    <button data-mode="text">${t.editor.text}</button><button data-mode="draw">${t.editor.draw}</button>
+  </div>`;
+}
+
 // -------------------------------------------------------------- compiling
 
 function compile(): void {
@@ -296,6 +322,7 @@ function compile(): void {
   }
   fixSelections();
   drawSchematic();
+  if (state.mode === "draw") blocks?.setCircuit(circuit);
   renderPanel();
 }
 
@@ -350,10 +377,15 @@ function drawSchematic(): void {
   highlight();
 }
 
-/** Marks the probed nodes and the selected component on the schematic. */
+/** Marks the probed nodes and the selected component on the schematic and the drawing. */
 function highlight(): void {
   const svg = document.querySelector("#pg-schematic svg");
-  if (!svg) return;
+  if (svg) decorate(svg);
+  const drawn = document.querySelector("#pg-editor svg");
+  if (drawn) decorate(drawn);
+}
+
+function decorate(svg: Element): void {
   const nodes = new Set<string>();
   if (state.tab === "transfer" && state.outKind === "voltage") {
     nodes.add(state.output);
@@ -377,8 +409,14 @@ function onSchematicClick(event: MouseEvent): void {
   const target = event.target as Element;
   const wire = target.closest<SVGElement>("[data-node]");
   const part = target.closest<SVGElement>("g[data-id]");
-  if (wire) {
-    const node = wire.dataset["node"] ?? "";
+  if (wire) probe("node", wire.dataset["node"] ?? "");
+  else if (part) probe("part", part.dataset["id"] ?? "");
+}
+
+/** A node or a component was clicked: probe it in the current tab. */
+function probe(kind: "node" | "part", value: string): void {
+  if (kind === "node") {
+    const node = value;
     if (state.tab === "transient") toggle(state.traces, node);
     else if (state.tab === "impedance") state.zA = node;
     else {
@@ -386,12 +424,12 @@ function onSchematicClick(event: MouseEvent): void {
       state.outKind = "voltage";
       state.output = node;
     }
-  } else if (part) {
-    const id = part.dataset["id"] ?? "";
+  } else {
+    const id = value;
     selected = selected === id ? undefined : id;
     if (state.tab === "transient") toggle(state.currents, id);
     if (state.tab === "transfer" && state.outKind === "current") state.outCurrent = id;
-  } else return;
+  }
   renderTabs();
   renderPanel();
 }
@@ -885,6 +923,7 @@ const SHARED: (keyof State)[] = [
 
 function shareUrl(): string {
   const hash = new URLSearchParams({ c: encode(state.netlist) });
+  if (state.mode === "draw" && blocks) hash.set("d", encode(JSON.stringify(blocks.drawing)));
   for (const key of SHARED) {
     const v = state[key];
     if (typeof v === "string" && v !== "") hash.set(key, v);
@@ -910,6 +949,16 @@ function readHash(): boolean {
   }
   state.traces = hash.get("traces")?.split(",").filter(Boolean) ?? [];
   state.currents = hash.get("currents")?.split(",").filter(Boolean) ?? [];
+  const d = hash.get("d");
+  pendingDrawing = undefined;
+  if (d) {
+    try {
+      pendingDrawing = JSON.parse(decode(d)) as Drawing;
+      state.mode = "draw";
+    } catch {
+      /* ignore a broken drawing */
+    }
+  } else state.mode = "text";
   return true;
 }
 
@@ -920,9 +969,16 @@ function toast(text: string): void {
   setTimeout(() => (el.hidden = true), 1800);
 }
 
+/** Drawing read from a link or the storage, loaded once the editor exists. */
+let pendingDrawing: Drawing | undefined;
+
 function save(): void {
   try {
     localStorage.setItem("elecmap-playground", state.netlist);
+    localStorage.setItem(
+      "elecmap-playground-drawing",
+      JSON.stringify({ mode: state.mode, drawing: blocks?.drawing }),
+    );
   } catch {
     /* storage blocked */
   }
@@ -970,8 +1026,67 @@ function loadExample(id: string): void {
   selected = undefined;
   $<HTMLTextAreaElement>("#pg-netlist").value = state.netlist;
   renderTabs();
-  compile();
+  if (state.mode === "draw") setMode("draw", true);
+  else compile();
   save();
+}
+
+// ------------------------------------------------------------------ modes
+
+let drawTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Netlist generated by the drawing. */
+function drawingChanged(netlist: string): void {
+  drawnNetlist = netlist;
+  state.netlist = netlist;
+  $<HTMLTextAreaElement>("#pg-netlist").value = netlist;
+  clearTimeout(drawTimer);
+  drawTimer = setTimeout(() => {
+    compile();
+    save();
+  }, 120);
+}
+
+/**
+ * Switches between the text and the drawing. Entering the drawing redraws the
+ * netlist with the automatic layout when it changed since the last drawing.
+ */
+function setMode(mode: State["mode"], redraw = false): void {
+  if (mode === "draw" && blocks && (redraw || drawnNetlist !== state.netlist)) {
+    const hasElements = state.netlist
+      .split(/\r?\n/)
+      .some((l) => l.trim() !== "" && !/^[*.;]/.test(l.trim()));
+    let drawing: Drawing;
+    try {
+      drawing = hasElements ? fromCircuit(new ElecMap(state.netlist)) : emptyDrawing();
+    } catch {
+      toast(t.editor.importFailed);
+      return;
+    }
+    state.mode = mode;
+    applyMode();
+    blocks.load(drawing);
+    $<HTMLTextAreaElement>("#pg-directives").value = drawing.directives;
+    drawingChanged(blocks.netlist());
+    return;
+  }
+  state.mode = mode;
+  applyMode();
+  if (mode === "draw") blocks?.setCircuit(circuit);
+  save();
+}
+
+function applyMode(): void {
+  const draw = state.mode === "draw";
+  $("#pg-draw-card").hidden = !draw;
+  $("#pg-schematic-card").hidden = draw;
+  $("#pg-netlist-hint").textContent = draw ? t.editor.generated : t.netlistHint;
+  $<HTMLTextAreaElement>("#pg-netlist").readOnly = draw;
+  document.querySelector(".pg-main")?.classList.toggle("pg-drawing", draw);
+  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-mode]")) {
+    b.classList.toggle("on", b.dataset["mode"] === state.mode);
+    b.setAttribute("aria-pressed", String(b.dataset["mode"] === state.mode));
+  }
 }
 
 function wire(): void {
@@ -1007,6 +1122,8 @@ function wire(): void {
   $<HTMLSelectElement>("#pg-style").addEventListener("change", (e) => {
     state.style = (e.target as HTMLSelectElement).value as State["style"];
     drawSchematic();
+    blocks?.palette();
+    blocks?.render();
   });
   $<HTMLSelectElement>("#pg-theme").addEventListener("change", (e) => {
     try {
@@ -1043,6 +1160,18 @@ function wire(): void {
     });
   }
   $("#pg-schematic").addEventListener("click", onSchematicClick);
+  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-mode]")) {
+    b.addEventListener("click", () => setMode(b.dataset["mode"] as State["mode"]));
+  }
+  blocks = new Editor($("#pg-editor"), {
+    t,
+    style: () => state.style,
+    changed: drawingChanged,
+    probe,
+    decorate,
+  });
+  const directives = $<HTMLTextAreaElement>("#pg-directives");
+  directives.addEventListener("change", () => blocks?.setDirectives(directives.value));
 
   const panel = $("#pg-panel");
   panel.addEventListener("change", (e) => {
@@ -1087,7 +1216,7 @@ function wire(): void {
     if (readHash()) {
       editor.value = state.netlist;
       renderTabs();
-      compile();
+      startMode();
     }
   });
   window.addEventListener("storage", (e) => {
@@ -1096,6 +1225,26 @@ function wire(): void {
 }
 
 // ------------------------------------------------------------------ start
+
+/** Shows the drawing read from a link or the storage, or the text. */
+function startMode(): void {
+  const drawing = pendingDrawing;
+  pendingDrawing = undefined;
+  const draw = blocks;
+  if (state.mode === "draw" && drawing && draw) {
+    draw.load({ ...emptyDrawing(), ...drawing });
+    $<HTMLTextAreaElement>("#pg-directives").value = draw.drawing.directives;
+    drawnNetlist = draw.netlist();
+    // The drawing is the source: its netlist replaces the text.
+    state.netlist = drawnNetlist;
+    $<HTMLTextAreaElement>("#pg-netlist").value = drawnNetlist;
+    applyMode();
+  } else if (state.mode === "draw") {
+    setMode("draw", true);
+    return;
+  } else applyMode();
+  compile();
+}
 
 shell();
 if (!readHash()) {
@@ -1107,10 +1256,18 @@ if (!readHash()) {
       state.traces = [];
       state.tStop = "";
     }
+    const drawn = JSON.parse(localStorage.getItem("elecmap-playground-drawing") ?? "null") as {
+      mode?: State["mode"];
+      drawing?: Drawing;
+    } | null;
+    if (drawn?.mode === "draw" && drawn.drawing) {
+      state.mode = "draw";
+      pendingDrawing = drawn.drawing;
+    }
   } catch {
     /* storage blocked */
   }
 }
 wire();
 renderTabs();
-compile();
+startMode();

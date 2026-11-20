@@ -65,7 +65,7 @@ Runnable with `npx tsx examples/<name>.ts` (all of them run in CI):
 - [Input formats](./docs/en/format.md): netlist syntax, JSON document, validation codes.
 - [Component catalogue](./docs/en/components.md): ports, fields, sign conventions.
 - [Algorithms](./docs/en/algorithms.md): MNA, transfer functions, transient, layout, symbolic engine.
-- [Playground](https://loangue.github.io/ElecMap/playground/): write a netlist in the browser and see its schematic, operating point, transfer function, Bode plot, transient response and impedance; the link of the **Share** button reproduces the circuit and the view. `npm run playground` serves it locally.
+- [Playground](https://loangue.github.io/ElecMap/playground/): write a netlist, or draw the circuit with blocks (the netlist is generated from the drawing), in the browser and see its schematic, operating point, transfer function, Bode plot, transient response and impedance; the link of the **Share** button reproduces the circuit and the view. `npm run playground` serves it locally.
 - [Documentation site](https://loangue.github.io/ElecMap/): guides with runnable examples and the full API reference, also [in French](https://loangue.github.io/ElecMap/fr/). It is rebuilt on every push to `main`; `npm run docs` builds it locally into `docs/api` (sources in `docs/en`, `docs/fr` and `docs/site`).
 
 ## Circuit input
