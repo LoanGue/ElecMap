@@ -292,10 +292,10 @@ interface ModelCard {
 type Models = ReadonlyMap<string, ModelCard>;
 
 /** Device families that take their parameters from a `.model` card. */
-type Family = "diode" | "bjt" | "mosfet";
+export type Family = "diode" | "bjt" | "mosfet";
 
 /** Numeric fields of each family and their SPICE parameter names. */
-const FAMILY_PARAMS: Record<Family, readonly (readonly [string, string])[]> = {
+export const FAMILY_PARAMS: Record<Family, readonly (readonly [string, string])[]> = {
   diode: [
     ["is", "IS"],
     ["n", "N"],

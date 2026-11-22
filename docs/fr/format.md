@@ -143,9 +143,7 @@ H.cutoffFrequency(); // 1000,0 Hz
 | `"base64"`  | un jeton sûr pour les URL | une seule chaîne sans espace, prête à être envoyée dans une URL ou un message |
 
 ```ts
-const c = new ElecMap("V1 in 0 AC 1
-R1 in out 1k
-C1 out 0 100n");
+const c = new ElecMap("V1 in 0 AC 1\nR1 in out 1k\nC1 out 0 100n");
 
 const token = c.export("base64");
 // "eyJ2ZXJzaW9uIjoxLCJjb21wb25lbnRzIjpbeyJpZCI6IlYxIiwidHlwZSI6InZzb3VyY2Ui…"
@@ -174,6 +172,73 @@ new ElecMap(token, { format: "base64" });
 ```
 
 Le jeton base64 est le document JSON compact en UTF-8 : il transporte donc tout ce que porte le JSON. Toutes les conversions passent par le document JSON : lire une netlist, c'est netlist → JSON ; l'exporter en base64, c'est JSON → base64. Chaque format n'a donc besoin que d'un lecteur et d'un écrivain.
+
+## Autres simulateurs : SPICE et LTspice
+
+`export("netlist")` garde les extensions d'ElecMap (`OPAMP`, `STEP`, interrupteurs `ON`/`OFF`, paramètres de composants en ligne). Deux fonctions d'écriture les traduisent pour d'autres outils :
+
+| Méthode       | Fichier | S'ouvre dans                                               |
+| ------------- | ------- | ---------------------------------------------------------- |
+| `toCir(opts)` | `.cir`  | LTspice, ngspice, KiCad (simulation par ngspice), PSpice   |
+| `toAsc(opts)` | `.asc`  | LTspice, sous forme de schéma prêt à simuler et à modifier |
+
+`opts.analysis` est l'analyse écrite à la fin, une ligne ou une liste de lignes (`".op"` par défaut), et `opts.idealGain` le gain en boucle ouverte donné aux AOP idéaux (10⁶ par défaut).
+
+```ts
+const amp = new ElecMap(`.title Non-inverting amplifier
+V1 in 0 STEP(0 100m 1m) AC 1
+R1 m 0 1k
+R2 m out 9k
+X1 in m out OPAMP
+D1 out lim IS=1e-14
+R3 lim 0 10k`);
+
+amp.toCir({ analysis: [".ac dec 50 10 10meg", ".tran 3m"] });
+// * Non-inverting amplifier
+// V1 in 0 PWL(0 0 1m 0 1.000001m 100m) AC 1
+// R1 m 0 1k
+// R2 m out 9k
+// EX1 out 0 in m 1meg
+// D1 out lim DMOD
+// R3 lim 0 10k
+// .model DMOD D(IS=10f)
+// .ac dec 50 10 10meg
+// .tran 3m
+// .end
+```
+
+Ce que `toCir` traduit :
+
+- **Noms :** un élément commence par la lettre de ce qu'il devient (`X1` ci-dessus est une source `E`, `EX1`), les noms issus des sous-circuits perdent leurs points (`X1.R1` → `RX1_R1`), les nœuds gardent lettres, chiffres et `_`, et la masse est `0` (`gnd` compris). Les noms restent uniques, sans tenir compte de la casse.
+- **AOP :** idéal → source commandée en tension de gain 10⁶ ; avec `GBW` → sous-circuit à un pôle (`OPAMP_X1`), même réponse que dans ElecMap.
+- **Interrupteurs :** fermé → source de 0 V (ou résistance `RON`), ouvert → résistance `ROFF`, ou rien si `ROFF` est infini.
+- **Sources :** `STEP` → `PWL` avec une montée de 1 ns ; la forme d'onde précède `AC` (l'ordre qu'écrit LTspice).
+- **Composants :** paramètres en ligne → une carte `.model` par jeu distinct (`DMOD`, `NPNMOD`…) ; les modèles nommés gardent leur nom, `W`/`L` restent sur la ligne du MOSFET.
+- **Sources comportementales :** `^` → `**` (dans LTspice, `^` est le OU exclusif). Écrivez `if(c, a, b)` plutôt que `c ? a : b`, et `&&`/`||` plutôt que `&`/`|` : ngspice et LTspice diffèrent sur ces points. ngspice ne lit `I()` que pour une source de tension.
+
+Le `.cir` se relit dans ElecMap avec les mêmes résultats : `new ElecMap(amp.toCir())` donne le même point de fonctionnement (à 10⁻⁴ près pour les AOP idéaux).
+
+`toAsc` dessine le schéma de [`layout()`](./schematics.md) avec les symboles de LTspice, les mêmes éléments et valeurs que `toCir`, et place les cartes `.model` et l'analyse dans une directive :
+
+```ts
+const asc = amp.toAsc({ analysis: ".tran 3m" });
+asc.split("\n").filter((l) => l.startsWith("SYMBOL"));
+// ["SYMBOL voltage 0 464 R0", "SYMBOL res -16 80 R0", "SYMBOL res 144 -112 R270",
+//  "SYMBOL Opamps\\opamp 192 -32 R0", "SYMBOL diode 512 16 R270", "SYMBOL res 688 80 R0"]
+asc
+  .split("\n")
+  .filter((l) => l.startsWith("FLAG"))
+  .map((l) => l.split(" ")[3]);
+// ["in", "0", "m", "0", "out", "lim", "0"]    chaque nœud est nommé : tracez V(out) dans LTspice
+asc.split("\n").at(-2);
+// "TEXT -64 704 Left 2 !.model DMOD D(IS=10f)\\n.lib opamp.sub\\n.tran 3m"
+```
+
+- Les AOP utilisent le symbole et le modèle `opamp` de LTspice (`.lib opamp.sub`, `Aol` et `GBW` ; un AOP idéal reçoit `Aol=1meg GBW=1t`).
+- Les fils ne se touchent que par leurs extrémités. Le dessin est vérifié par rapport à la netlist avant d'être écrit, et un nœud que LTspice lirait autrement est relié par des étiquettes plutôt que par des fils.
+- Les couplages `K` et les interrupteurs ouverts n'ont pas de symbole : ils sont écrits en directive et en commentaire.
+
+Dans le [playground](https://loangue.github.io/ElecMap/playground/), les boutons **SPICE** et **LTspice** au-dessus du schéma téléchargent ces fichiers avec l'analyse de l'onglet ouvert.
 
 ## Validation
 

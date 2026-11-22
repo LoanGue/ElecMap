@@ -296,7 +296,9 @@ function shell(): void {
           </select>
           <button data-download="svg">${t.downloadSvg}</button>
           <button data-download="json">${t.downloadJson}</button>
-          <button data-download="netlist">${t.downloadNetlist}</button>
+          <button data-download="netlist" title="${esc(t.downloadNetlistHint)}">${t.downloadNetlist}</button>
+          <button data-download="cir" title="${esc(t.downloadCirHint)}">${t.downloadCir}</button>
+          <button data-download="asc" title="${esc(t.downloadAscHint)}">${t.downloadAsc}</button>
         </div>
       </div>
       <div id="pg-schematic" class="pg-schematic"></div>
@@ -1156,18 +1158,36 @@ function save(): void {
   }
 }
 
+/** SPICE analysis lines matching the open tab. */
+function spiceAnalysis(): string[] {
+  switch (state.tab) {
+    case "transfer":
+    case "impedance":
+      return [`.ac dec 50 ${state.fStart} ${state.fStop}`];
+    case "transient":
+      return [`.tran ${state.tStep} ${state.tStop}`];
+    default:
+      return [".op"];
+  }
+}
+
 function download(kind: string): void {
-  if (!circuit) return;
-  const [text, type, ext] =
-    kind === "svg"
-      ? [
-          circuit.toSVG({ theme: "light", style: state.style, background: true }),
-          "image/svg+xml",
-          "svg",
-        ]
-      : kind === "json"
-        ? [`${JSON.stringify(circuit.toJSON(), null, 2)}\n`, "application/json", "json"]
-        : [circuit.toSpice(), "text/plain", "cir"];
+  const c = circuit;
+  if (!c) return;
+  const files: Record<string, () => [string, string, string]> = {
+    svg: () => [
+      c.toSVG({ theme: "light", style: state.style, background: true }),
+      "image/svg+xml",
+      "svg",
+    ],
+    json: () => [`${JSON.stringify(c.toJSON(), null, 2)}\n`, "application/json", "json"],
+    netlist: () => [c.toSpice(), "text/plain", "sp"],
+    cir: () => [c.toCir({ analysis: spiceAnalysis() }), "text/plain", "cir"],
+    asc: () => [c.toAsc({ analysis: spiceAnalysis() }), "text/plain", "asc"],
+  };
+  const make = files[kind];
+  if (!make) return;
+  const [text, type, ext] = make();
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([text], { type }));
   a.download = `circuit.${ext}`;

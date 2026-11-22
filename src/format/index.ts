@@ -12,3 +12,7 @@ export { CIRCUIT_SCHEMA } from "./schema";
 export { EXPRESSION_FUNCTIONS } from "./expression";
 export { latexNumber, polynomialToLatex } from "./latex";
 export type { LatexNumberOptions, LatexPolynomialOptions } from "./latex";
+export { toCir } from "./cir";
+export type { CirOptions } from "./cir";
+export { toAsc } from "./asc";
+export type { AscOptions } from "./asc";

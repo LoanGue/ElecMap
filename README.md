@@ -39,6 +39,7 @@ c.toSVG(); // standalone <svg> schematic
 | Area           | What you get                                                                                                                                                        |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Input          | SPICE netlists (engineering suffixes, `.title`, waveforms), canonical JSON, round-trip `toJSON()` / `toSpice()`, `export("base64")` to share a circuit as one token |
+| Export         | Portable SPICE netlist `toCir()` for LTspice, ngspice and KiCad; LTspice schematic `toAsc()`, drawn from the layout                                                 |
 | DC / AC        | Operating point, phasors at any frequency, log sweeps, voltage between any two nodes, current in any branch                                                         |
 | Transfer funcs | Exact H(s), LaTeX, Bode, poles/zeros, stability, filter type, cutoff, Q, ω₀, ζ, response to sines                                                                   |
 | Literal H(s)   | Transfer functions and impedances in terms of component symbols (`R_{1}`, `C_{2}`…), with partial substitution                                                      |
