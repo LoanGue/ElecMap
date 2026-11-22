@@ -399,8 +399,12 @@ const PRECEDENCE: Record<BinaryOperator, number> = {
   "^": 7,
 };
 
-/** Writes an expression back as text, with the parentheses it needs. */
-export function formatExpression(e: Expr): string {
+/**
+ * Writes an expression back as text, with the parentheses it needs. `power`
+ * spells the power operator (`**` for LTspice, where `^` is a logical XOR).
+ */
+export function formatExpression(e: Expr, options: { power?: "^" | "**" } = {}): string {
+  const power = options.power ?? "^";
   // Levels: binary operators 1–5 and 7, unary 6, atoms 8.
   const level = (x: Expr): number =>
     x.k === "binary" ? PRECEDENCE[x.op] : x.k === "unary" ? 6 : x.k === "num" && x.v < 0 ? 6 : 8;
@@ -422,7 +426,8 @@ export function formatExpression(e: Expr): string {
         // "^" is right-associative, the others left-associative.
         const [lmin, rmin] = x.op === "^" ? [p + 1, p] : [p, p + 1];
         const sep = p >= 5 ? "" : " ";
-        return `${wrap(x.l, lmin)}${sep}${x.op}${sep}${wrap(x.r, rmin)}`;
+        const op = x.op === "^" ? power : x.op;
+        return `${wrap(x.l, lmin)}${sep}${op}${sep}${wrap(x.r, rmin)}`;
       }
     }
   };

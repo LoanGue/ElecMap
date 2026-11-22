@@ -143,9 +143,7 @@ H.cutoffFrequency(); // 1000.0 Hz
 | `"base64"`  | a URL-safe token       | a single string without spaces, ready to send in a URL or a message |
 
 ```ts
-const c = new ElecMap("V1 in 0 AC 1
-R1 in out 1k
-C1 out 0 100n");
+const c = new ElecMap("V1 in 0 AC 1\nR1 in out 1k\nC1 out 0 100n");
 
 const token = c.export("base64");
 // "eyJ2ZXJzaW9uIjoxLCJjb21wb25lbnRzIjpbeyJpZCI6IlYxIiwidHlwZSI6InZzb3VyY2Ui…"
@@ -174,6 +172,73 @@ new ElecMap(token, { format: "base64" });
 ```
 
 The base64 token is the compact JSON document in UTF-8, so it carries everything the JSON does. Every conversion goes through the JSON document: reading a netlist means netlist → JSON, exporting it means JSON → base64, so each format only needs a reader and a writer.
+
+## Other simulators: SPICE and LTspice
+
+`export("netlist")` keeps ElecMap's extensions (`OPAMP`, `STEP`, switches `ON`/`OFF`, inline device parameters). Two writers translate them for other tools:
+
+| Method        | File   | Opens in                                                     |
+| ------------- | ------ | ------------------------------------------------------------ |
+| `toCir(opts)` | `.cir` | LTspice, ngspice, KiCad (simulation through ngspice), PSpice |
+| `toAsc(opts)` | `.asc` | LTspice, as a schematic ready to simulate and edit           |
+
+`opts.analysis` is the analysis written at the end, a line or a list of lines (default `".op"`), and `opts.idealGain` the open-loop gain given to ideal op-amps (default 10⁶).
+
+```ts
+const amp = new ElecMap(`.title Non-inverting amplifier
+V1 in 0 STEP(0 100m 1m) AC 1
+R1 m 0 1k
+R2 m out 9k
+X1 in m out OPAMP
+D1 out lim IS=1e-14
+R3 lim 0 10k`);
+
+amp.toCir({ analysis: [".ac dec 50 10 10meg", ".tran 3m"] });
+// * Non-inverting amplifier
+// V1 in 0 PWL(0 0 1m 0 1.000001m 100m) AC 1
+// R1 m 0 1k
+// R2 m out 9k
+// EX1 out 0 in m 1meg
+// D1 out lim DMOD
+// R3 lim 0 10k
+// .model DMOD D(IS=10f)
+// .ac dec 50 10 10meg
+// .tran 3m
+// .end
+```
+
+What `toCir` translates:
+
+- **Names:** an element starts with the letter of what it becomes (`X1` above is an `E` source, `EX1`), flattened subcircuit names lose their dots (`X1.R1` → `RX1_R1`), nodes keep letters, digits and `_`, and the ground is `0` (`gnd` included). Names stay unique, case aside.
+- **Op-amps:** ideal → a voltage-controlled source of gain 10⁶; with `GBW` → a subcircuit with one pole (`OPAMP_X1`), same response as in ElecMap.
+- **Switches:** closed → a 0 V source (or a resistor `RON`), open → a resistor `ROFF`, or nothing when `ROFF` is infinite.
+- **Sources:** `STEP` → `PWL` with a 1 ns rise; the waveform comes before `AC` (the order LTspice writes).
+- **Devices:** inline parameters → one `.model` card per distinct set (`DMOD`, `NPNMOD`…); named models keep their name, `W`/`L` stay on the MOSFET line.
+- **Behavioural sources:** `^` → `**` (in LTspice `^` is XOR). Write `if(c, a, b)` rather than `c ? a : b`, and `&&`/`||` rather than `&`/`|`: ngspice and LTspice differ on these. ngspice only reads `I()` of a voltage source.
+
+The `.cir` reads back in ElecMap with the same results: `new ElecMap(amp.toCir())` gives the same operating point (within 10⁻⁴ for ideal op-amps).
+
+`toAsc` draws the schematic of [`layout()`](./schematics.md) with LTspice's symbols, the same elements and values as `toCir`, and the `.model` cards and analysis in a directive:
+
+```ts
+const asc = amp.toAsc({ analysis: ".tran 3m" });
+asc.split("\n").filter((l) => l.startsWith("SYMBOL"));
+// ["SYMBOL voltage 0 464 R0", "SYMBOL res -16 80 R0", "SYMBOL res 144 -112 R270",
+//  "SYMBOL Opamps\\opamp 192 -32 R0", "SYMBOL diode 512 16 R270", "SYMBOL res 688 80 R0"]
+asc
+  .split("\n")
+  .filter((l) => l.startsWith("FLAG"))
+  .map((l) => l.split(" ")[3]);
+// ["in", "0", "m", "0", "out", "lim", "0"]    every net is named: plot V(out) in LTspice
+asc.split("\n").at(-2);
+// "TEXT -64 704 Left 2 !.model DMOD D(IS=10f)\\n.lib opamp.sub\\n.tran 3m"
+```
+
+- Op-amps use LTspice's `opamp` symbol and model (`.lib opamp.sub`, `Aol` and `GBW`; an ideal op-amp gets `Aol=1meg GBW=1t`).
+- Wires only touch at their ends. The drawing is checked against the netlist before it is written, and a net that LTspice would read differently is joined by labels instead of wires.
+- `K` couplings and open switches have no symbol: they are written as a directive and a comment.
+
+In the [playground](https://loangue.github.io/ElecMap/playground/), the **SPICE** and **LTspice** buttons above the schematic download these files with the analysis of the open tab.
 
 ## Validation
 

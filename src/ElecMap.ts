@@ -1,6 +1,10 @@
 import { compile } from "./core/circuit";
 import type { CircuitInput, CompileOptions, CompiledCircuit } from "./core/circuit";
 import { writeCircuit } from "./format/exchange";
+import { toCir } from "./format/cir";
+import { toAsc } from "./format/asc";
+import type { AscOptions } from "./format/asc";
+import type { CirOptions } from "./format/cir";
 import type { CircuitFormat, FormatOutput } from "./format/exchange";
 import { ElecMapError } from "./core/errors";
 import { COMPONENT_CATALOG } from "./format/catalog";
@@ -273,6 +277,46 @@ export class ElecMap {
    */
   toSpice(): string {
     return this.compiled.toSpice();
+  }
+
+  /**
+   * Portable SPICE netlist (`.cir`) for LTspice, ngspice and KiCad: ElecMap's
+   * extensions are translated (op-amps become controlled sources, fixed
+   * switches resistors, `STEP` a `PWL`, device parameters `.model` cards) and
+   * names follow SPICE rules. `analysis` sets the analysis lines (default `.op`).
+   *
+   * @example
+   * ```ts
+   * new ElecMap("V1 in 0 AC 1\nR1 in out 10k\nX1 0 out o2 OPAMP").toCir({ analysis: ".ac dec 20 1 1meg" });
+   * // * ElecMap circuit
+   * // V1 in 0 AC 1
+   * // R1 in out 10k
+   * // EX1 o2 0 0 out 1meg
+   * // .ac dec 20 1 1meg
+   * // .end
+   * ```
+   */
+  toCir(options: CirOptions = {}): string {
+    return toCir(this.compiled.toJSON(), options);
+  }
+
+  /**
+   * Writes the circuit as an LTspice schematic (`.asc`): the schematic of
+   * {@link layout} redrawn with LTspice's symbols, its nets named as here, the
+   * `.model` cards and the analysis as directives. Elements and values are
+   * those of {@link toCir}.
+   *
+   * @example
+   * ```ts
+   * const asc = new ElecMap("V1 in 0 AC 1\nR1 in out 1k\nC1 out 0 100n").toAsc({
+   *   analysis: ".ac dec 20 10 100k",
+   * });
+   * asc.split("\n").filter((l) => l.startsWith("SYMBOL"));
+   * // ["SYMBOL voltage 0 80 R0", "SYMBOL res 144 16 R270", "SYMBOL cap 336 96 R0"]
+   * ```
+   */
+  toAsc(options: AscOptions = {}): string {
+    return toAsc(this.compiled.toJSON(), this.layout({ ground: "symbols" }), options);
   }
 
   /**

@@ -17,6 +17,12 @@ const en = {
   downloadSvg: "SVG",
   downloadJson: "JSON",
   downloadNetlist: "Netlist",
+  downloadNetlistHint: "ElecMap netlist (.sp), read back by ElecMap",
+  downloadCir: "SPICE",
+  downloadCirHint:
+    "Portable SPICE netlist (.cir) for LTspice, ngspice or KiCad, with the analysis of the open tab",
+  downloadAsc: "LTspice",
+  downloadAscHint: "LTspice schematic (.asc), drawn from this schematic",
   compiled: (nodes: number, components: number) =>
     `${components} component${components === 1 ? "" : "s"}, ${nodes} node${nodes === 1 ? "" : "s"}`,
   warnings: "Warnings",
@@ -207,6 +213,12 @@ const fr: Strings = {
   downloadSvg: "SVG",
   downloadJson: "JSON",
   downloadNetlist: "Netlist",
+  downloadNetlistHint: "Netlist ElecMap (.sp), relue par ElecMap",
+  downloadCir: "SPICE",
+  downloadCirHint:
+    "Netlist SPICE portable (.cir) pour LTspice, ngspice ou KiCad, avec l’analyse de l’onglet ouvert",
+  downloadAsc: "LTspice",
+  downloadAscHint: "Schéma LTspice (.asc), dessiné d’après ce schéma",
   compiled: (nodes: number, components: number) =>
     `${components} composant${components > 1 ? "s" : ""}, ${nodes} nœud${nodes > 1 ? "s" : ""}`,
   warnings: "Avertissements",
