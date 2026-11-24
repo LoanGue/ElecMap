@@ -98,7 +98,7 @@ circuit.toSVG({
 });
 ```
 
-With `theme: "none"` the SVG has no colours of its own: style it from your page with CSS (this site does).
+With `theme: "none"` the SVG has no colours of its own: style it from the page with CSS (this site does).
 
 ## Make it interactive
 
@@ -132,9 +132,9 @@ container.addEventListener("click", (event) => {
 </figure>
 </div>
 
-## Use the layout yourself
+## Use the layout directly
 
-To draw with your own tools (canvas, React, a schematic editor), take the placement instead of the SVG:
+To draw with custom tools (canvas, React, a schematic editor), take the placement instead of the SVG:
 
 ```ts
 const layout = amp.layout();

@@ -5,7 +5,7 @@ category: Guides
 
 # Literal transfer functions
 
-Instead of numbers, get H(s) written with the component names, as in a textbook. The result is exact, and you can plug values back in at any time.
+Instead of numbers, get H(s) written with the component names, as in a textbook. The result is exact, and values can be plugged back in at any time.
 
 ## From a circuit to a formula
 
@@ -69,7 +69,7 @@ H.toString();
 
 ## Plug values back in
 
-`substitute` turns the formula into a numeric {@link TransferFunction}. Components you don't mention keep their value from the netlist:
+`substitute` turns the formula into a numeric {@link TransferFunction}. Components not mentioned keep their value from the netlist:
 
 ```ts
 const tuned = H.substitute({ C1: 20e-9 });

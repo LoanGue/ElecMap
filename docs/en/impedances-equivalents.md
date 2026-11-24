@@ -47,7 +47,7 @@ Coupled inductors (`K`) are taken into account.
 
 ### When the network mixes R, L and C
 
-A single equivalent component only exists if the network is made of one kind of component. Otherwise you get an explicit error, and you can ask for the value at DC or at a given frequency:
+A single equivalent component only exists if the network is made of one kind of component. Otherwise an explicit error is raised, and the value can be requested at DC or at a given frequency:
 
 ```ts
 const rlc = new ElecMap(`

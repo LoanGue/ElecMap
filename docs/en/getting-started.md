@@ -5,7 +5,7 @@ category: Guides
 
 # Getting started
 
-This page takes you from an empty project to a solved circuit in five minutes. Every snippet runs as is; the comments show the actual output.
+This page goes from an empty project to a solved circuit in five minutes. Every snippet runs as is; the comments show the actual output.
 
 ## Install
 
@@ -15,7 +15,7 @@ npm install elecmap
 
 ElecMap has no dependencies and works the same in Node.js (≥ 18) and in the browser, with `import` or `require`.
 
-## Your first circuit
+## A first circuit
 
 A circuit is written as a **SPICE netlist**: one component per line, `name node node value`. Node `0` is the ground.
 
