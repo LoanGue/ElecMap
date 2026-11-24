@@ -47,7 +47,7 @@ Les bobines couplées (`K`) sont prises en compte.
 
 ### Quand le réseau mélange R, L et C
 
-Un composant équivalent unique n'existe que si le réseau est constitué d'un seul type de composant. Sinon, vous obtenez une erreur explicite, et vous pouvez demander la valeur en continu ou à une fréquence donnée :
+Un composant équivalent unique n'existe que si le réseau est constitué d'un seul type de composant. Sinon, une erreur explicite est levée, et la valeur peut être demandée en continu ou à une fréquence donnée :
 
 ```ts
 const rlc = new ElecMap(`

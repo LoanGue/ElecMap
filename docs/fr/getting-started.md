@@ -5,7 +5,7 @@ category: Guides
 
 # Premiers pas
 
-Cette page vous mène d'un projet vide à un circuit résolu en cinq minutes. Chaque extrait s'exécute tel quel ; les commentaires montrent la sortie réelle.
+Cette page mène d'un projet vide à un circuit résolu en cinq minutes. Chaque extrait s'exécute tel quel ; les commentaires montrent la sortie réelle.
 
 ## Installation
 
@@ -15,7 +15,7 @@ npm install elecmap
 
 ElecMap n'a aucune dépendance et fonctionne de la même façon sous Node.js (≥ 18) et dans le navigateur, avec `import` ou `require`.
 
-## Votre premier circuit
+## Un premier circuit
 
 Un circuit s'écrit sous forme de **netlist SPICE** : un composant par ligne, `nom nœud nœud valeur`. Le nœud `0` est la masse.
 
@@ -114,7 +114,7 @@ divider.setValue("R2", 3000);
 divider.voltage("out"); // 7.5
 ```
 
-## Vous préférez le JSON ?
+## Et en JSON ?
 
 Le même circuit peut être fourni sous forme d'objet JSON (pratique lorsqu'il provient d'un éditeur ou d'une base de données) :
 

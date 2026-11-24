@@ -5,7 +5,7 @@ category: Guides
 
 # Fonctions de transfert littérales
 
-Au lieu de nombres, obtenez H(s) écrite avec les noms des composants, comme dans un manuel. Le résultat est exact, et vous pouvez y réinjecter des valeurs à tout moment.
+Au lieu de nombres, obtenez H(s) écrite avec les noms des composants, comme dans un manuel. Le résultat est exact, et des valeurs peuvent y être réinjectées à tout moment.
 
 ## Du circuit à la formule
 
@@ -69,7 +69,7 @@ H.toString();
 
 ## Réinjecter des valeurs
 
-`substitute` transforme la formule en une {@link TransferFunction} numérique. Les composants que vous ne mentionnez pas conservent leur valeur de la netlist :
+`substitute` transforme la formule en une {@link TransferFunction} numérique. Les composants non mentionnés conservent leur valeur de la netlist :
 
 ```ts
 const tuned = H.substitute({ C1: 20e-9 });

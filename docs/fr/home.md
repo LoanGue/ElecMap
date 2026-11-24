@@ -58,7 +58,7 @@ Chaque guide est une suite de courts exemples exécutables, accompagnés de leur
 
 ## Ce qu'il contient
 
-| Vous voulez…                                              | Appel                                                                                                   |
+| Pour obtenir…                                             | Appel                                                                                                   |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | une tension ou un courant                                 | {@link ElecMap.voltage}, {@link ElecMap.current}                                                        |
 | H(s), en nombres ou en symboles                           | {@link ElecMap.transferFunction}, {@link ElecMap.symbolicTransferFunction}                              |
