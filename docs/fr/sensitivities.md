@@ -5,7 +5,7 @@ category: Guides
 
 # Sensibilités
 
-Quel composant compte ? `sensitivity(sortie, id)` indique de combien une sortie bouge quand un composant change. `sensitivities(sortie)` pose la question pour tous les composants à la fois et les classe. Servez-vous-en pour choisir des tolérances, trouver le composant à ajuster, ou vérifier qu'un montage ne dépend pas d'un paramètre mal maîtrisé comme le β d'un transistor.
+Quel composant compte ? `sensitivity(sortie, id)` indique de combien une sortie bouge quand un composant change. `sensitivities(sortie)` pose la question pour tous les composants à la fois et les classe. Elles servent à choisir des tolérances, trouver le composant à ajuster, ou vérifier qu'un montage ne dépend pas d'un paramètre mal maîtrisé comme le β d'un transistor.
 
 ## Un composant
 

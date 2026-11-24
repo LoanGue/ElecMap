@@ -98,7 +98,7 @@ circuit.toSVG({
 });
 ```
 
-Avec `theme: "none"`, le SVG n'a pas de couleurs propres : stylez-le depuis votre page en CSS (c'est ce que fait ce site).
+Avec `theme: "none"`, le SVG n'a pas de couleurs propres : stylez-le depuis la page en CSS (c'est ce que fait ce site).
 
 ## Le rendre interactif
 
@@ -132,9 +132,9 @@ container.addEventListener("click", (event) => {
 </figure>
 </div>
 
-## Utiliser le placement vous-même
+## Utiliser le placement directement
 
-Pour dessiner avec vos propres outils (canvas, React, un éditeur de schémas), récupérez le placement au lieu du SVG :
+Pour dessiner avec des outils personnalisés (canvas, React, un éditeur de schémas), récupérez le placement au lieu du SVG :
 
 ```ts
 const layout = amp.layout();

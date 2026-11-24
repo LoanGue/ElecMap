@@ -5,7 +5,7 @@ category: Guides
 
 # Diodes et circuits non linéaires
 
-Une diode rend le circuit non linéaire : les courants ne sont plus proportionnels aux sources. ElecMap résout alors le circuit par **Newton-Raphson**, comme SPICE, et toutes les analyses que vous connaissez continuent de fonctionner :
+Une diode rend le circuit non linéaire : les courants ne sont plus proportionnels aux sources. ElecMap résout alors le circuit par **Newton-Raphson**, comme SPICE, et toutes les analyses habituelles continuent de fonctionner :
 
 | Analyse                                               | Ce qui se passe avec une diode                                              |
 | ----------------------------------------------------- | --------------------------------------------------------------------------- |
