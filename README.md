@@ -36,7 +36,7 @@ c.toSVG(); // standalone <svg> schematic
 
 ## Features
 
-| Area           | What you get                                                                                                                                                        |
+| Area           | What it provides                                                                                                                                                    |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Input          | SPICE netlists (engineering suffixes, `.title`, waveforms), canonical JSON, round-trip `toJSON()` / `toSpice()`, `export("base64")` to share a circuit as one token |
 | Export         | Portable SPICE netlist `toCir()` for LTspice, ngspice and KiCad; LTspice schematic `toAsc()`, drawn from the layout                                                 |

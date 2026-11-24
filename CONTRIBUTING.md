@@ -1,6 +1,6 @@
 # Contributing to ElecMap
 
-Thanks for your interest! ElecMap is a zero-dependency TypeScript library.
+Contributions are welcome! ElecMap is a zero-dependency TypeScript library.
 
 ## Setup
 
