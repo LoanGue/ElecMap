@@ -58,7 +58,7 @@ Every guide is a series of short, runnable examples with their real output.
 
 ## What's inside
 
-| You want…                            | Call                                                                                                    |
+| To get…                              | Call                                                                                                    |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
 | a voltage or a current               | {@link ElecMap.voltage}, {@link ElecMap.current}                                                        |
 | H(s), in numbers or in symbols       | {@link ElecMap.transferFunction}, {@link ElecMap.symbolicTransferFunction}                              |

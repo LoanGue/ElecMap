@@ -5,7 +5,7 @@ category: Guides
 
 # Diodes and non-linear circuits
 
-A diode makes the circuit non-linear: currents are no longer proportional to the sources. ElecMap then solves the circuit with **Newton-Raphson**, as SPICE does, and every analysis you already know keeps working:
+A diode makes the circuit non-linear: currents are no longer proportional to the sources. ElecMap then solves the circuit with **Newton-Raphson**, as SPICE does, and every familiar analysis keeps working:
 
 | Analysis                                              | What happens with a diode                                         |
 | ----------------------------------------------------- | ----------------------------------------------------------------- |
@@ -144,7 +144,7 @@ H.poles()[0].abs() / (2 * Math.PI); // 2369600000 Hz   the junction capacitance
 H.zeros()[0].abs() / (2 * Math.PI); // 45389000000 Hz  R_S in series with it
 ```
 
-The linearised system is available as `circuit.smallSignal`, an `MnaSystem` you can pass to the low-level functions. For a linear circuit it is `circuit.system` itself.
+The linearised system is available as `circuit.smallSignal`, an `MnaSystem` that can be passed to the low-level functions. For a linear circuit it is `circuit.system` itself.
 
 > [!NOTE]
 > The operating point uses the DC values of the sources; AC magnitudes do not move it. An AC magnitude of 1 V on a diode circuit means "1 V of small signal", not a 1 V sine: to see clipping or distortion, use a transient.

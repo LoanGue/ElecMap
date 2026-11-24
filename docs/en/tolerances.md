@@ -5,7 +5,7 @@ category: Guides
 
 # Tolerances (Monte-Carlo)
 
-A 1 kΩ resistor sold at ±5 % is somewhere between 950 Ω and 1050 Ω. `monteCarlo` builds many copies of the circuit, each with its components drawn at random within their tolerance, so that you see the spread of the real circuit: the range of a cut-off frequency, the envelope of a Bode plot, the yield of a bias network.
+A 1 kΩ resistor sold at ±5 % is somewhere between 950 Ω and 1050 Ω. `monteCarlo` builds many copies of the circuit, each with its components drawn at random within their tolerance, so that the spread of the real circuit becomes visible: the range of a cut-off frequency, the envelope of a Bode plot, the yield of a bias network.
 
 Where {@link ElecMap.sensitivity | sensitivities} give the slope around the nominal point, Monte-Carlo gives the actual spread, with every tolerance at once and without linearising.
 

@@ -21,7 +21,7 @@ C1 out 0 100n
 {@include ./figures/rc-lowpass.svg}
 </figure>
 
-## DC or AC? You choose with the last argument
+## DC or AC? The last argument decides
 
 | Call                                | Analysis                                                | Result           |
 | ----------------------------------- | ------------------------------------------------------- | ---------------- |
