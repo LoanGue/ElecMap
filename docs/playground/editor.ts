@@ -571,6 +571,8 @@ export class Editor {
   private readonly canvas: HTMLElement;
   private readonly props: HTMLElement;
   private readonly status: HTMLElement;
+  /** Zoom of the canvas (1 = one grid step is U pixels). */
+  private zoom = 1;
 
   constructor(
     private readonly root: HTMLElement,
@@ -604,6 +606,34 @@ export class Editor {
     this.status = root.querySelector(".ed-status") as HTMLElement;
     this.palette();
     this.bind();
+  }
+
+  /** The scrolling canvas (for zoom and pan). */
+  get viewport(): HTMLElement {
+    return this.canvas;
+  }
+
+  /** Bounds of the drawing at scale 1, in pixels. */
+  extent(): { width: number; height: number } {
+    const d = this.drawing;
+    const xs = [
+      ...d.parts.flatMap((p) => pinsOf(p).map((q) => q.x)),
+      ...d.wires.flatMap((w) => [w.x1, w.x2]),
+      ...d.grounds.map((g) => g.x),
+      ...d.labels.map((l) => l.x + l.name.length),
+    ];
+    const ys = [
+      ...d.parts.flatMap((p) => pinsOf(p).map((q) => q.y)),
+      ...d.wires.flatMap((w) => [w.y1, w.y2]),
+      ...d.grounds.map((g) => g.y + 2),
+      ...d.labels.map((l) => l.y),
+    ];
+    return { width: (Math.max(4, ...xs) + 3) * U, height: (Math.max(4, ...ys) + 3) * U };
+  }
+
+  setZoom(scale: number): void {
+    this.zoom = scale;
+    this.render();
   }
 
   // ---------------------------------------------------------------- API
@@ -858,7 +888,11 @@ export class Editor {
   private at(e: PointerEvent | MouseEvent): { grid: Pt; exact: Pt } {
     const svg = this.canvas.querySelector("svg");
     const r = (svg ?? this.canvas).getBoundingClientRect();
-    const exact = { x: (e.clientX - r.left - U) / U, y: (e.clientY - r.top - U) / U };
+    const z = this.zoom;
+    const exact = {
+      x: ((e.clientX - r.left) / z - U) / U,
+      y: ((e.clientY - r.top) / z - U) / U,
+    };
     return { grid: { x: Math.round(exact.x), y: Math.round(exact.y) }, exact };
   }
 
@@ -1246,8 +1280,8 @@ export class Editor {
       ...d.grounds.map((g) => g.y + 2),
       ...d.labels.map((l) => l.y),
     ];
-    const viewW = Math.floor((this.canvas.clientWidth || 600) / U) - 2;
-    const viewH = Math.floor((this.canvas.clientHeight || 420) / U) - 2;
+    const viewW = Math.floor((this.canvas.clientWidth || 600) / (U * this.zoom)) - 2;
+    const viewH = Math.floor((this.canvas.clientHeight || 420) / (U * this.zoom)) - 2;
     const layout: SchematicLayout = {
       components,
       nets: [...nets.values()],
@@ -1343,9 +1377,14 @@ export class Editor {
       svg = svg.replace('class="c" data-id="__ghost"', 'class="c ed-ghost" data-id="__ghost"');
     const scroll = { left: this.canvas.scrollLeft, top: this.canvas.scrollTop };
     this.canvas.innerHTML = svg;
+    const el = this.canvas.querySelector("svg");
+    if (el && this.zoom !== 1) {
+      for (const a of ["width", "height"]) {
+        el.setAttribute(a, String(Number(el.getAttribute(a)) * this.zoom));
+      }
+    }
     this.canvas.scrollLeft = scroll.left;
     this.canvas.scrollTop = scroll.top;
-    const el = this.canvas.querySelector("svg");
     if (el) this.host.decorate(el);
     if (d.parts.length === 0 && d.wires.length === 0 && this.tool.kind === "select") {
       this.status.textContent = this.host.t.editor.empty;
