@@ -19,6 +19,7 @@ import type { Drawing } from "./editor";
 import { EXAMPLES } from "./examples";
 import type { Tab } from "./examples";
 import { STRINGS } from "./i18n";
+import { Viewport } from "./viewport";
 import "./style.css";
 import type { Lang, Strings } from "./i18n";
 
@@ -103,6 +104,11 @@ let selected: string | undefined;
 /** Block editor, and the netlist it last generated (the drawing is up to date when they match). */
 let blocks: Editor | undefined;
 let drawnNetlist: string | undefined;
+/** What the side panel shows: the netlist, or the analysis of `state.tab`. */
+let view: "netlist" | "analysis" = "netlist";
+/** Zoom and pan of the schematic and of the drawing. */
+let schematicView: Viewport | undefined;
+let editorView: Viewport | undefined;
 
 // --------------------------------------------------------------- helpers
 
@@ -261,58 +267,82 @@ function shell(): void {
   </nav>
 </header>
 <main class="pg-main">
-  <section class="pg-left">
-    <div class="pg-card" id="pg-draw-card" hidden>
-      <div class="pg-card-head">
-        <h2>${t.editor.draw}</h2>
-        ${modeSwitch()}
+  <section class="pg-stage" aria-label="${t.schematic}">
+    <div class="pg-bar">
+      ${modeSwitch()}
+      <select id="pg-example" aria-label="${t.examples}">
+        <option value="">${t.examples}…</option>
+        ${EXAMPLES.map((e) => `<option value="${e.id}">${esc(e.name[lang])}</option>`).join("")}
+      </select>
+      <span class="pg-grow"></span>
+      <select id="pg-style" aria-label="${t.symbols}" title="${t.symbols}">
+        <option value="iec">IEC</option>
+        <option value="ansi">ANSI</option>
+      </select>
+      <details class="pg-menu" id="pg-download">
+        <summary>${t.download}</summary>
+        <div class="pg-menu-list" role="menu">
+          ${(
+            [
+              ["svg", t.downloadSvg, t.downloadSvgHint],
+              ["json", t.downloadJson, t.downloadJsonHint],
+              ["netlist", t.downloadNetlist, t.downloadNetlistHint],
+              ["cir", t.downloadCir, t.downloadCirHint],
+              ["asc", t.downloadAsc, t.downloadAscHint],
+            ] as const
+          )
+            .map(
+              ([k, name, hint]) =>
+                `<button role="menuitem" data-download="${k}"><strong>${name}</strong><span>${esc(hint)}</span></button>`,
+            )
+            .join("")}
+        </div>
+      </details>
+    </div>
+    <div id="pg-schematic" class="pg-schematic pg-canvas"></div>
+    <div id="pg-editor" class="ed" hidden></div>
+    <div class="pg-foot">
+      <div id="pg-status"></div>
+      <p class="pg-hint" id="pg-stage-hint">${t.schematicHint}</p>
+      <div class="pg-zoom" role="group" aria-label="Zoom">
+        <button data-zoom="out" title="${t.zoomOut}" aria-label="${t.zoomOut}">−</button>
+        <button data-zoom="fit" class="pg-zoom-level" title="${t.zoomFitHint}">100 %</button>
+        <button data-zoom="in" title="${t.zoomIn}" aria-label="${t.zoomIn}">+</button>
       </div>
-      <div id="pg-editor" class="ed"></div>
-      <details class="pg-directives">
+    </div>
+  </section>
+  <div class="pg-split" role="separator" aria-orientation="vertical" tabindex="0" aria-label="${t.panelResize}" title="${t.panelResize}"></div>
+  <aside class="pg-side" id="pg-side">
+    <div class="pg-side-head">
+      <div class="pg-tabs" role="tablist">
+        <button role="tab" data-view="netlist">${t.netlist}</button>
+        <span class="pg-tab-sep" aria-hidden="true"></span>
+        ${(Object.keys(t.tabs) as Tab[])
+          .map(
+            (k) =>
+              `<button role="tab" data-tab="${k}" title="${t.tabs[k]}">${t.tabsShort[k]}</button>`,
+          )
+          .join("")}
+      </div>
+      <button class="pg-collapse" data-panel="hide" title="${t.panelHide}" aria-label="${t.panelHide}">»</button>
+    </div>
+    <div id="pg-netlist-pane" class="pg-pane">
+      <textarea id="pg-netlist" spellcheck="false" autocomplete="off" aria-label="${t.netlist}"></textarea>
+      <p class="pg-hint" id="pg-netlist-hint">${t.netlistHint}</p>
+      <details class="pg-directives" id="pg-directives-box" hidden>
         <summary>${t.editor.directives}</summary>
         <textarea id="pg-directives" spellcheck="false" autocomplete="off" aria-label="${t.editor.directives}"></textarea>
       </details>
     </div>
-    <div class="pg-card" id="pg-netlist-card">
-      <div class="pg-card-head">
-        <h2>${t.netlist}</h2>
-        ${modeSwitch()}
-        <select id="pg-example" aria-label="${t.examples}">
-          <option value="">${t.examples}…</option>
-          ${EXAMPLES.map((e) => `<option value="${e.id}">${esc(e.name[lang])}</option>`).join("")}
-        </select>
-      </div>
-      <textarea id="pg-netlist" spellcheck="false" autocomplete="off" aria-label="${t.netlist}"></textarea>
-      <p class="pg-hint" id="pg-netlist-hint">${t.netlistHint}</p>
-      <div id="pg-status"></div>
-    </div>
-    <div class="pg-card" id="pg-schematic-card">
-      <div class="pg-card-head">
-        <h2>${t.schematic}</h2>
-        <div class="pg-tools">
-          <select id="pg-style" aria-label="${t.symbols}">
-            <option value="iec">IEC</option>
-            <option value="ansi">ANSI</option>
-          </select>
-          <button data-download="svg">${t.downloadSvg}</button>
-          <button data-download="json">${t.downloadJson}</button>
-          <button data-download="netlist" title="${esc(t.downloadNetlistHint)}">${t.downloadNetlist}</button>
-          <button data-download="cir" title="${esc(t.downloadCirHint)}">${t.downloadCir}</button>
-          <button data-download="asc" title="${esc(t.downloadAscHint)}">${t.downloadAsc}</button>
-        </div>
-      </div>
-      <div id="pg-schematic" class="pg-schematic"></div>
-      <p class="pg-hint">${t.schematicHint}</p>
-    </div>
-  </section>
-  <section class="pg-right pg-card">
-    <div class="pg-tabs" role="tablist">
-      ${(Object.keys(t.tabs) as Tab[])
-        .map((k) => `<button role="tab" data-tab="${k}">${t.tabs[k]}</button>`)
-        .join("")}
-    </div>
-    <div id="pg-panel" class="pg-panel"></div>
-  </section>
+    <div id="pg-panel" class="pg-panel pg-pane" hidden></div>
+  </aside>
+  <nav class="pg-rail" id="pg-rail" hidden aria-label="${t.panelShow}">
+    <button data-panel="show" title="${t.panelShow}" aria-label="${t.panelShow}">«</button>
+    <button data-view="netlist">${t.netlist}</button>
+    ${(Object.keys(t.tabs) as Tab[])
+      .map((k) => `<button data-tab="${k}" title="${t.tabs[k]}">${t.tabsShort[k]}</button>`)
+      .join("")}
+  </nav>
 </main>
 <div id="pg-toast" class="pg-toast" hidden></div>`;
   applyTheme();
@@ -387,17 +417,68 @@ function drawSchematic(): void {
   box.classList.remove("pg-stale");
   try {
     box.innerHTML = circuit.toSVG({ theme: "none", style: state.style, title: t.schematic });
-    // Wide schematics scroll rather than shrink below 80 % (labels stay readable).
-    const svg = box.querySelector("svg");
-    const natural = Number(svg?.getAttribute("width"));
-    if (svg && natural > 0) {
-      const room = box.clientWidth - 20;
-      svg.style.width = `${Math.min(natural, Math.max(room, natural * 0.8))}px`;
-    }
+    // Fitted to the view until the user zooms.
+    const size = schematicSize();
+    if (schematicView && !schematicView.manual) schematicView.fit(size.width, size.height);
+    sizeSchematic(schematicView?.scale ?? 1);
   } catch (err) {
     box.innerHTML = errorBox(err);
   }
   highlight();
+}
+
+/** Size of the schematic at scale 1. */
+function schematicSize(): { width: number; height: number } {
+  const svg = document.querySelector("#pg-schematic svg");
+  return {
+    width: Number(svg?.getAttribute("width")) || 1,
+    height: Number(svg?.getAttribute("height")) || 1,
+  };
+}
+
+function sizeSchematic(scale: number): void {
+  const svg = document.querySelector<SVGSVGElement>("#pg-schematic svg");
+  const { width, height } = schematicSize();
+  if (svg) {
+    svg.style.width = `${width * scale}px`;
+    svg.style.height = `${height * scale}px`;
+  }
+  $("#pg-schematic").style.setProperty("--grid", `${Math.max(8, 20 * scale)}px`);
+  zoomLabel();
+}
+
+/** The zoom of the visible drawing, on the zoom button. */
+function zoomLabel(): void {
+  const v = activeView();
+  const el = document.querySelector(".pg-zoom-level");
+  if (el && v) el.textContent = `${Math.round(v.scale * 100)} %`;
+}
+
+function activeView(): Viewport | undefined {
+  return state.mode === "draw" ? editorView : schematicView;
+}
+
+/** Fits the visible drawing to the stage. */
+function fitView(): void {
+  if (state.mode === "draw") {
+    if (blocks && editorView) {
+      const e = blocks.extent();
+      editorView.fit(e.width, e.height, 1);
+    }
+  } else if (schematicView) {
+    const size = schematicSize();
+    schematicView.fit(size.width, size.height);
+  }
+  zoomLabel();
+}
+
+function zoom(action: string): void {
+  const v = activeView();
+  if (!v) return;
+  if (action === "in") v.zoomIn();
+  else if (action === "out") v.zoomOut();
+  else fitView();
+  zoomLabel();
 }
 
 /** Marks the probed nodes and the selected component on the schematic and the drawing. */
@@ -497,8 +578,7 @@ function probe(kind: "node" | "part", value: string): void {
     if (state.tab === "transient") toggle(state.currents, id);
     if (state.tab === "transfer" && state.outKind === "current") state.outCurrent = id;
   }
-  renderTabs();
-  renderPanel();
+  showView("analysis");
 }
 
 function toggle(list: string[], value: string): void {
@@ -510,16 +590,34 @@ function toggle(list: string[], value: string): void {
 // ------------------------------------------------------------------ panel
 
 function renderTabs(): void {
-  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-tab]")) {
-    const on = b.dataset["tab"] === state.tab;
+  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-tab], [data-view]")) {
+    const on =
+      b.dataset["view"] === "netlist"
+        ? view === "netlist"
+        : view === "analysis" && b.dataset["tab"] === state.tab;
     b.classList.toggle("on", on);
-    b.setAttribute("aria-selected", String(on));
+    if (b.getAttribute("role") === "tab") b.setAttribute("aria-selected", String(on));
   }
+  $("#pg-netlist-pane").hidden = view !== "netlist";
+  $("#pg-panel").hidden = view !== "analysis";
+}
+
+/** Shows the netlist or the analysis in the side panel (and opens it). */
+function showView(next: typeof view): void {
+  view = next;
+  setCollapsed(false);
+  renderTabs();
+  renderPanel();
 }
 
 function renderPanel(): void {
   const panel = $("#pg-panel");
   panel.classList.toggle("pg-stale", !circuit);
+  // Analyses only run when they are seen.
+  if (view !== "analysis" || panelCollapsed) {
+    highlight();
+    return;
+  }
   if (!circuit) return;
   if (sourceIds().length === 0 && state.tab !== "impedance") {
     panel.innerHTML = `<p class="pg-note">${t.sources}</p>`;
@@ -981,6 +1079,12 @@ interface PlotData {
 const plots = new Map<string, PlotData>();
 let plotCount = 0;
 
+/** Plots are drawn at the width of the panel, so their text keeps its size. */
+function plotWidth(): number {
+  const w = document.querySelector("#pg-panel")?.clientWidth ?? 0;
+  return Math.max(320, Math.round(w > 0 ? w : 560));
+}
+
 /** A plot with a cursor that reads every series at the mouse position. */
 function figure(options: Parameters<typeof plot>[0], units: [string, number][]): string {
   const id = `p${++plotCount}`;
@@ -993,7 +1097,7 @@ function figure(options: Parameters<typeof plot>[0], units: [string, number][]):
     })),
     xFormat,
   });
-  return `<figure class="pg-plot" data-plot="${id}">${plot({ width: 720, ...options })}<div class="pg-cursor" hidden></div><div class="pg-readout" hidden></div></figure>`;
+  return `<figure class="pg-plot" data-plot="${id}">${plot({ width: plotWidth(), panelHeight: 130, ...options })}<div class="pg-cursor" hidden></div><div class="pg-readout" hidden></div></figure>`;
 }
 
 function onPlotMove(event: MouseEvent): void {
@@ -1195,6 +1299,119 @@ function download(kind: string): void {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
+// ------------------------------------------------------------ side panel
+
+const PANEL_KEY = "elecmap-playground-panel";
+let panelCollapsed = false;
+let panelWidth = 0;
+
+/** Width limits of the side panel, in pixels. */
+function panelLimits(): [number, number] {
+  return [320, Math.max(360, Math.round(window.innerWidth * 0.7))];
+}
+
+function setPanelWidth(width: number): void {
+  const [min, max] = panelLimits();
+  panelWidth = Math.round(Math.min(max, Math.max(min, width)));
+  $(".pg-main").style.setProperty("--side", `${panelWidth}px`);
+  const split = $(".pg-split");
+  split.setAttribute("aria-valuemin", String(min));
+  split.setAttribute("aria-valuemax", String(max));
+  split.setAttribute("aria-valuenow", String(panelWidth));
+}
+
+function setCollapsed(collapsed: boolean): void {
+  if (collapsed === panelCollapsed) return;
+  panelCollapsed = collapsed;
+  $(".pg-main").classList.toggle("pg-collapsed", collapsed);
+  $("#pg-side").hidden = collapsed;
+  $(".pg-split").hidden = collapsed;
+  $("#pg-rail").hidden = !collapsed;
+  savePanel();
+}
+
+function savePanel(): void {
+  try {
+    localStorage.setItem(
+      PANEL_KEY,
+      JSON.stringify({ width: panelWidth, collapsed: panelCollapsed }),
+    );
+  } catch {
+    /* storage blocked */
+  }
+}
+
+/** Width and state of the panel from the last visit (about 40 % of the window at first). */
+function restorePanel(): void {
+  let saved: { width?: number; collapsed?: boolean } = {};
+  try {
+    saved = JSON.parse(localStorage.getItem(PANEL_KEY) ?? "{}") as typeof saved;
+  } catch {
+    /* storage blocked */
+  }
+  setPanelWidth(saved.width ?? Math.min(640, window.innerWidth * 0.4));
+  setCollapsed(saved.collapsed === true);
+}
+
+/** The bar between the stage and the panel: drag it, or use the arrow keys. */
+function splitter(): void {
+  const split = $(".pg-split");
+  let drag: { x: number; width: number } | undefined;
+  split.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    drag = { x: e.clientX, width: panelWidth };
+    split.setPointerCapture(e.pointerId);
+    document.body.classList.add("pg-resizing");
+  });
+  split.addEventListener("pointermove", (e) => {
+    if (drag) setPanelWidth(drag.width - (e.clientX - drag.x));
+  });
+  const end = () => {
+    if (!drag) return;
+    drag = undefined;
+    document.body.classList.remove("pg-resizing");
+    savePanel();
+  };
+  split.addEventListener("pointerup", end);
+  split.addEventListener("pointercancel", end);
+  split.addEventListener("dblclick", () => {
+    setPanelWidth(Math.min(640, window.innerWidth * 0.4));
+    savePanel();
+  });
+  split.addEventListener("keydown", (e) => {
+    const step = e.shiftKey ? 80 : 24;
+    if (e.key === "ArrowLeft") setPanelWidth(panelWidth + step);
+    else if (e.key === "ArrowRight") setPanelWidth(panelWidth - step);
+    else if (e.key === "Enter") setCollapsed(true);
+    else return;
+    e.preventDefault();
+    savePanel();
+  });
+
+  // Plots follow the width of the panel; drawings stay fitted until zoomed.
+  let width = $("#pg-panel").clientWidth;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  new ResizeObserver(() => {
+    const w = $("#pg-panel").clientWidth;
+    if (w === 0 || Math.abs(w - width) < 24) return;
+    width = w;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (view === "analysis" && document.querySelector("#pg-panel .pg-plot")) renderPanel();
+    }, 150);
+  }).observe($("#pg-side"));
+  let fitTimer: ReturnType<typeof setTimeout> | undefined;
+  new ResizeObserver(() => {
+    clearTimeout(fitTimer);
+    fitTimer = setTimeout(() => {
+      const v = activeView();
+      if (v && !v.manual) fitView();
+      else if (state.mode === "draw") blocks?.render();
+    }, 100);
+  }).observe($(".pg-stage"));
+}
+
 // ------------------------------------------------------------------ events
 
 function loadExample(id: string): void {
@@ -1217,6 +1434,10 @@ function loadExample(id: string): void {
   state.literal = false;
   selected = undefined;
   $<HTMLTextAreaElement>("#pg-netlist").value = state.netlist;
+  if (schematicView) schematicView.manual = false;
+  if (editorView) editorView.manual = false;
+  view = "analysis";
+  setCollapsed(false);
   renderTabs();
   if (state.mode === "draw") setMode("draw", true);
   else compile();
@@ -1270,11 +1491,15 @@ function setMode(mode: State["mode"], redraw = false): void {
 
 function applyMode(): void {
   const draw = state.mode === "draw";
-  $("#pg-draw-card").hidden = !draw;
-  $("#pg-schematic-card").hidden = draw;
+  $("#pg-editor").hidden = !draw;
+  $("#pg-schematic").hidden = draw;
+  $("#pg-directives-box").hidden = !draw;
+  $("#pg-stage-hint").textContent = draw ? t.zoomHint : `${t.schematicHint} ${t.zoomHint}`;
   $("#pg-netlist-hint").textContent = draw ? t.editor.generated : t.netlistHint;
   $<HTMLTextAreaElement>("#pg-netlist").readOnly = draw;
   document.querySelector(".pg-main")?.classList.toggle("pg-drawing", draw);
+  if (draw && editorView && !editorView.manual) fitView();
+  zoomLabel();
   for (const b of document.querySelectorAll<HTMLButtonElement>("[data-mode]")) {
     b.classList.toggle("on", b.dataset["mode"] === state.mode);
     b.setAttribute("aria-pressed", String(b.dataset["mode"] === state.mode));
@@ -1349,10 +1574,39 @@ function wire(): void {
   for (const b of document.querySelectorAll<HTMLButtonElement>("[data-tab]")) {
     b.addEventListener("click", () => {
       state.tab = b.dataset["tab"] as Tab;
-      renderTabs();
+      showView("analysis");
+    });
+  }
+  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-view]")) {
+    b.addEventListener("click", () => showView("netlist"));
+  }
+  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-panel]")) {
+    b.addEventListener("click", () => {
+      setCollapsed(b.dataset["panel"] === "hide");
       renderPanel();
     });
   }
+  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-zoom]")) {
+    b.addEventListener("click", () => zoom(b.dataset["zoom"] ?? ""));
+  }
+  const menu = $<HTMLDetailsElement>("#pg-download");
+  menu.addEventListener("click", (e) => {
+    if ((e.target as Element).closest("[data-download]")) menu.open = false;
+  });
+  document.addEventListener("pointerdown", (e) => {
+    if (menu.open && !menu.contains(e.target as Node)) menu.open = false;
+  });
+  menu.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      menu.open = false;
+      menu.querySelector("summary")?.focus();
+    }
+  });
+  schematicView = new Viewport($("#pg-schematic"), {
+    panWithPrimary: true,
+    onZoom: (s) => sizeSchematic(s),
+  });
+  splitter();
   $("#pg-schematic").addEventListener("click", onSchematicClick);
   for (const b of document.querySelectorAll<HTMLButtonElement>("[data-mode]")) {
     b.addEventListener("click", () => setMode(b.dataset["mode"] as State["mode"]));
@@ -1363,6 +1617,13 @@ function wire(): void {
     changed: drawingChanged,
     probe,
     decorate,
+  });
+  const drawn = blocks;
+  editorView = new Viewport(drawn.viewport, {
+    onZoom: (s) => {
+      drawn.setZoom(s);
+      zoomLabel();
+    },
   });
   const directives = $<HTMLTextAreaElement>("#pg-directives");
   directives.addEventListener("change", () => blocks?.setDirectives(directives.value));
@@ -1446,7 +1707,9 @@ function startMode(): void {
 }
 
 shell();
-if (!readHash()) {
+restorePanel();
+if (readHash()) view = "analysis";
+else {
   try {
     const saved = localStorage.getItem("elecmap-playground");
     if (saved) {
