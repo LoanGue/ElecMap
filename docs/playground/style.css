@@ -1,11 +1,6 @@
 /* ElecMap playground. Same palette and fonts as the documentation theme. */
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap");
 
-/* The hidden attribute always wins over a component's own display rule. */
-[hidden] {
-  display: none !important;
-}
-
 :root {
   --bg: #f6f8fb;
   --card: #ffffff;
@@ -300,6 +295,9 @@ body.pg-resizing {
   cursor: grab;
   touch-action: none;
   overscroll-behavior: contain;
+}
+.pg-schematic[hidden] {
+  display: none;
 }
 .pg-schematic svg {
   display: block;
