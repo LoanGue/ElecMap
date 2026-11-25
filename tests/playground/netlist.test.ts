@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { connect, fromCircuit, toNetlist } from "../../docs/playground/editor";
-import type { Drawing } from "../../docs/playground/editor";
+import { fromCircuit } from "../../docs/playground/circuit-import";
+import type { Drawing } from "../../docs/playground/model";
+import { connect, toNetlist } from "../../docs/playground/netlist";
 import { EXAMPLES } from "../../docs/playground/examples";
 import { ElecMap } from "../../src";
 
-describe("playground block editor", () => {
+describe("playground netlist and circuit import", () => {
   it.each(EXAMPLES.map((e) => [e.id, e.netlist] as const))(
     "%s survives netlist → drawing → netlist",
     (_id, netlist) => {
