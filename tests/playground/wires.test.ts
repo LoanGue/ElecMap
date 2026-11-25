@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { looseEnds, prune, simplify, steps } from "../../docs/playground/wires";
+import {
+  horizontal,
+  looseEnds,
+  points,
+  prune,
+  segment,
+  simplify,
+  steps,
+} from "../../docs/playground/wires";
 import type { Pt, Wire } from "../../docs/playground/wires";
 
 const w = (x1: number, y1: number, x2: number, y2: number): Wire => ({ x1, y1, x2, y2 });
@@ -19,6 +27,14 @@ describe("playground wires", () => {
   it("lists the unit steps a wire covers", () => {
     expect(steps(w(3, 1, 0, 1))).toEqual(["0,1,h", "1,1,h", "2,1,h"]);
     expect(steps(w(2, 0, 2, 2))).toEqual(["2,0,v", "2,1,v"]);
+  });
+
+  it("builds, classifies and walks a wire", () => {
+    expect(segment(p(1, 2), p(4, 2))).toEqual(w(1, 2, 4, 2));
+    expect(horizontal(w(1, 2, 4, 2))).toBe(true);
+    expect(horizontal(w(1, 2, 1, 5))).toBe(false);
+    expect(horizontal(w(1, 2, 1, 2))).toBe(false);
+    expect(points(w(2, 1, 2, -1))).toEqual(["2,1", "2,0", "2,-1"]);
   });
 
   it("merges wires in line at a free point, not at an anchor", () => {
@@ -51,5 +67,10 @@ describe("playground wires", () => {
       "4,0-4,3",
       "4,3-6,3",
     ]);
+  });
+  it("keeps wiring that ends on a diagonal wire", () => {
+    const wires = [w(0, 0, 3, 0), w(3, 0, 5, 2)];
+    expect(shape(prune(wires, [p(0, 0), p(5, 2)], new Set()))).toEqual(["0,0-3,0", "3,0-5,2"]);
+    expect([...looseEnds(wires, [p(0, 0)])]).toEqual([]);
   });
 });

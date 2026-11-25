@@ -50,7 +50,7 @@ export function points(w: Wire): string[] {
 }
 
 /** Which steps of `set` leave (x, y): right, left, down, up. */
-export function arms(set: Set<string>, x: number, y: number): boolean[] {
+export function arms(set: Set<string>, x: number, y: number): [boolean, boolean, boolean, boolean] {
   return [
     set.has(`${x},${y},h`),
     set.has(`${x - 1},${y},h`),
@@ -110,10 +110,11 @@ export function simplify(wires: Wire[], anchors: Pt[]): Wire[] {
   return [...out, ...odd];
 }
 
-/** Wire ends that touch nothing (no other wire, no anchor). */
+/** Wire ends that touch nothing (no other wire, no anchor). Diagonal wires count by their ends. */
 export function looseEnds(wires: Wire[], anchors: Pt[]): Set<string> {
   const set = new Set(wires.flatMap(steps));
-  const fixed = new Set(anchors.map(key));
+  const diagonal = wires.filter((w) => !straight(w)).flatMap(endsOf);
+  const fixed = new Set([...anchors, ...diagonal].map(key));
   const out = new Set<string>();
   for (const w of wires) {
     if (!straight(w)) continue;
