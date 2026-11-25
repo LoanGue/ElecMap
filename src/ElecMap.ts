@@ -17,7 +17,7 @@ import type { DcOptions } from "./analysis/dc";
 import { acAnalysis, acSweep } from "./analysis/ac";
 import type { AcExcitation, AcSweep, AcSweepOptions } from "./analysis/ac";
 import type { AcSolution, DcSolution } from "./analysis/solution";
-import { transferFunction } from "./analysis/transfer";
+import { toTransferOptions, transferFunction } from "./analysis/transfer";
 import { feedbackWarnings } from "./analysis/feedback";
 import type { ValidationIssue } from "./format/validate";
 import { transient } from "./analysis/transient";
@@ -331,8 +331,7 @@ export class ElecMap {
    * ```ts
    * const token = c.export("base64"); // "eyJ2ZXJzaW9uIjox…"
    * new ElecMap(token).voltage("out"); // same circuit
-   * c.export("netlist"); // "* ElecMap circuit
-V1 in 0 …"
+   * c.export("netlist"); // "* ElecMap circuit\nV1 in 0 …"
    * ```
    */
   export<F extends CircuitFormat>(format: F): FormatOutput[F] {
@@ -524,11 +523,7 @@ V1 in 0 …"
    * ```
    */
   transferFunction(spec: OutputSpec | TransferOptions): TransferFunction {
-    const options: TransferOptions =
-      typeof spec === "object" && !Array.isArray(spec) && "output" in spec
-        ? (spec as TransferOptions)
-        : { output: spec as OutputSpec };
-    return transferFunction(this.smallSignal, options);
+    return transferFunction(this.smallSignal, toTransferOptions(spec));
   }
 
   /**
@@ -538,21 +533,13 @@ V1 in 0 …"
    *
    * @example
    * ```ts
-   * const schmitt = new ElecMap("V1 n1 0 1
-R3 in n1 1k
-X1 n2 in out OPAMP
-R2 n2 out 1k
-R1 n2 0 1k");
+   * const schmitt = new ElecMap("V1 n1 0 1\nR3 in n1 1k\nX1 n2 in out OPAMP\nR2 n2 out 1k\nR1 n2 0 1k");
    * schmitt.transferFunction("out").dcGain(); // 2 (looks stable)
    * schmitt.transferWarnings("out").map((w) => w.code); // ["POSITIVE_FEEDBACK"]
    * ```
    */
   transferWarnings(spec: OutputSpec | TransferOptions): ValidationIssue[] {
-    const options: TransferOptions =
-      typeof spec === "object" && !Array.isArray(spec) && "output" in spec
-        ? (spec as TransferOptions)
-        : { output: spec as OutputSpec };
-    return feedbackWarnings(this.system, options);
+    return feedbackWarnings(this.system, toTransferOptions(spec));
   }
 
   /**

@@ -45,6 +45,13 @@ export interface TransferOptions {
   output: OutputSpec;
 }
 
+/** Options of a transfer function given either as an output alone or as full options. */
+export function toTransferOptions(spec: OutputSpec | TransferOptions): TransferOptions {
+  return typeof spec === "object" && !Array.isArray(spec) && "output" in spec
+    ? (spec as TransferOptions)
+    : { output: spec as OutputSpec };
+}
+
 /** Returns the id of the input source, picking the obvious one when not given. */
 export function resolveInput(system: MnaSystem, input?: string): string {
   const sources = system.circuit.components.filter(
