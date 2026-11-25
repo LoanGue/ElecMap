@@ -17,6 +17,7 @@ import {
 } from "./devices";
 import { compileExpression } from "./behavioral";
 import type { CompiledExpression, ProbeForm } from "./behavioral";
+import { opampModel } from "./opamp";
 
 /**
  * One term `(g + s·c) · x[index]` of a {@link LinearForm}.
@@ -94,6 +95,8 @@ export interface LoadContext {
    * default guess instead of the (meaningless) voltages of `x`.
    */
   readonly initial: boolean;
+  /** First iteration of a Newton solve (DC or one time step). */
+  readonly first: boolean;
   /** Tells the solver that a voltage was limited: the iterate cannot be accepted yet. */
   limited(): void;
   /** Conductance placed across every junction (S). */
@@ -157,6 +160,8 @@ export interface ComponentModel<T extends ComponentJSON = ComponentJSON> {
    * {@link ComponentModel.stamp} leaves empty.
    */
   load?(c: T, ctx: LoadContext): void;
+  /** Whether this component needs {@link ComponentModel.load} (default: when `load` exists). */
+  nonlinear?(c: T): boolean;
   /** Multi-terminal devices: the current into each terminal (they sum to zero). */
   terminals?(c: T, ctx: FormContext): Terminal[];
   /** Non-linear devices with stored charge: their junctions (empty or absent without one). */
@@ -536,27 +541,7 @@ export const MODELS: ModelMap = {
     current: (c, ctx) => branchForm(ctx.branch(c.id)),
   },
 
-  opamp: {
-    // Output branch current I flows from `out` into the op-amp (towards ground).
-    // Ideal:       V+ − V− = 0
-    // Finite gain: Vout·(1 + s/ωp) − A·(V+ − V−) = 0, ωp = 2π·GBW / A
-    branches: () => 1,
-    stamp(c, ctx) {
-      const [ip, im, out] = c.nodes.map((n) => ctx.node(n)) as [number, number, number];
-      const k = ctx.branch(c.id);
-      ctx.addG(out, k, 1);
-      if (c.gain === undefined) {
-        ctx.addG(k, ip, 1);
-        ctx.addG(k, im, -1);
-      } else {
-        ctx.addG(k, out, 1);
-        ctx.addG(k, ip, -c.gain);
-        ctx.addG(k, im, c.gain);
-        if (c.gbw !== undefined) ctx.addC(k, out, c.gain / (2 * Math.PI * c.gbw));
-      }
-    },
-    current: (c, ctx) => branchForm(ctx.branch(c.id)),
-  },
+  opamp: opampModel,
 
   switch: {
     branches: (c) => (switchMode(c) === "short" ? 1 : 0),

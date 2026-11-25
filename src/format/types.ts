@@ -196,12 +196,18 @@ export interface BehavioralSourceJSON extends ComponentBase {
  * Operational amplifier, `nodes = [non-inverting, inverting, output]`, output referenced to ground.
  * Ideal (virtual short) when `gain` is omitted; otherwise a finite open-loop
  * gain, with an optional gain-bandwidth product `gbw` (Hz) giving a single-pole model.
+ * With `vpos` and `vneg` (V, both or neither, `vpos > vneg`), the output saturates
+ * smoothly between these rails (non-linear model, open-loop gain 1e6 when ideal).
  */
 export interface OpAmpJSON extends ComponentBase {
   type: "opamp";
   nodes: [NodeName, NodeName, NodeName];
   gain?: number;
   gbw?: number;
+  /** Positive output rail (V). */
+  vpos?: number;
+  /** Negative output rail (V). */
+  vneg?: number;
 }
 
 /** Magnetic coupling between two inductors (SPICE `K`), `0 < k ≤ 1`. */
