@@ -12,6 +12,7 @@ import { singleSource } from "../mna/system";
 import type { ResponseOptions, StepMetrics, TimeResponse } from "./response";
 import { defaultDuration, impulseResponseOf, simulateResponse, stepMetrics } from "./response";
 import type { Signal } from "./waveforms";
+import { voltageRatio } from "./voltage-input";
 
 // ------------------------------------------------------------------ specs
 
@@ -23,13 +24,24 @@ import type { Signal } from "./waveforms";
  */
 export type OutputSpec = NodeName | readonly [NodeName, NodeName] | { readonly current: string };
 
+/**
+ * A voltage of the circuit used as the input of a transfer function, so that
+ * `H = V(out) / V(in)`. `source` drives the circuit (picked automatically like
+ * a plain input when there is only one).
+ */
+export interface VoltageInput {
+  readonly voltage: NodeName | readonly [NodeName, NodeName];
+  readonly source?: string;
+}
+
 /** Options for {@link transferFunction}. */
 export interface TransferOptions {
   /**
-   * Id of the independent source used as input. Optional when the circuit has a
-   * single AC source or a single independent source.
+   * Id of the independent source used as input, or a voltage of the circuit
+   * (`{ voltage: "in" }`). Optional when the circuit has a single AC source or
+   * a single independent source.
    */
-  input?: string;
+  input?: string | VoltageInput;
   output: OutputSpec;
 }
 
@@ -242,6 +254,9 @@ function cancelCommon(num: Polynomial, den: Polynomial): Interpolation {
 
 /** Transfer function `output / input` of a circuit (all other sources off). */
 export function transferFunction(system: MnaSystem, options: TransferOptions): TransferFunction {
+  if (typeof options.input === "object" && options.input !== null) {
+    return voltageRatio(system, options.output, options.input);
+  }
   const input = resolveInput(system, options.input);
   const { form, label } = outputForm(system, options.output);
   const values = singleSource(input, 1);

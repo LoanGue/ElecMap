@@ -518,6 +518,7 @@ V1 in 0 …"
    *
    * c.transferFunction({ input: "V1", output: ["in", "out"] }); // (V(in) − V(out)) / V1
    * c.transferFunction({ input: "V1", output: { current: "R1" } }); // I(R1) / V1
+   * c.transferFunction({ input: { voltage: "in" }, output: "out" }); // V(out) / V(in)
    * ```
    */
   transferFunction(spec: OutputSpec | TransferOptions): TransferFunction {
