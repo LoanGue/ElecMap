@@ -39,12 +39,12 @@ The controlling current of `cccs` / `ccvs` is the current through an independent
 
 ## Active and switching components
 
-| Type     | SPICE        | `nodes`           | Fields                                                     |
-| -------- | ------------ | ----------------- | ---------------------------------------------------------- |
-| `opamp`  | `X… OPAMP`   | `[in+, in-, out]` | `gain?` open-loop gain, `gbw?` gain-bandwidth product (Hz) |
-| `switch` | `S… ON\|OFF` | `[a, b]`          | `closed`, `ron?` (default 0), `roff?` (default ∞)          |
+| Type     | SPICE        | `nodes`           | Fields                                                                                         |
+| -------- | ------------ | ----------------- | ---------------------------------------------------------------------------------------------- |
+| `opamp`  | `X… OPAMP`   | `[in+, in-, out]` | `gain?` open-loop gain, `gbw?` gain-bandwidth product (Hz), `vpos?` / `vneg?` output rails (V) |
+| `switch` | `S… ON\|OFF` | `[a, b]`          | `closed`, `ron?` (default 0), `roff?` (default ∞)                                              |
 
-- **Op-amp:** ideal (virtual short between the inputs, infinite input impedance, zero output impedance) when `gain` is omitted. With `gain`, the output is `A·(V+ − V−)`; adding `gbw` gives a single-pole model `A / (1 + s·A/(2π·GBW))`. The output is referenced to ground.
+- **Op-amp:** ideal (virtual short between the inputs, infinite input impedance, zero output impedance) when `gain` is omitted. With `gain`, the output is `A·(V+ − V−)`; adding `gbw` gives a single-pole model `A / (1 + s·A/(2π·GBW))`. The output is referenced to ground. With `vpos` and `vneg` (SPICE `VSAT=v` or `VPOS=v VNEG=v`), the output saturates smoothly between the rails: see [a Schmitt trigger](./time-domain.md).
 - **Switch:** a fixed-state switch, useful to compare configurations. It is not voltage-controlled.
 
 ## Non-linear components

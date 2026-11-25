@@ -41,28 +41,28 @@ Exemples : `1k`, `4.7u`, `100nF`, `1e-3`, `2MEG`. La notation européenne est é
 
 ### Éléments
 
-| Ligne                                        | Composant                                                                |
-| -------------------------------------------- | ------------------------------------------------------------------------ |
-| `Rname n1 n2 value`                          | résistance (Ω)                                                           |
-| `Cname n1 n2 value [IC=v]`                   | condensateur (F), tension initiale                                       |
-| `Lname n1 n2 value [IC=i]`                   | bobine (H), courant initial                                              |
-| `Vname n+ n- [DC v] [AC mag [phase]] [wave]` | source de tension indépendante                                           |
-| `Iname n+ n- [DC i] [AC mag [phase]] [wave]` | source de courant indépendante                                           |
-| `Ename n+ n- nc+ nc- gain`                   | source de tension commandée en tension                                   |
-| `Gname n+ n- nc+ nc- gm`                     | source de courant commandée en tension                                   |
-| `Fname n+ n- Vctrl gain`                     | source de courant commandée en courant                                   |
-| `Hname n+ n- Vctrl r`                        | source de tension commandée en courant                                   |
-| `Bname n+ n- V=expr` / `I=expr`              | source comportementale (voir [guide](./behavioral-sources.md))           |
-| `Kname L1 L2 k`                              | bobines couplées, `0 < k ≤ 1`                                            |
-| `Xname in+ in- out OPAMP [GAIN=a] [GBW=f]`   | amplificateur opérationnel _(extension ElecMap)_                         |
-| `Xname node… NAME [K=v…]`                    | instance de sous-circuit (voir [plus bas](#sous-circuits-et-paramètres)) |
-| `Sname n1 n2 ON\|OFF [RON=r] [ROFF=r]`       | interrupteur à état fixe _(extension ElecMap)_                           |
-| `Dname anode cathode [model] [area] [K=v…]`  | diode, Zener (voir [diodes](./diodes.md))                                |
-| `.model name D(IS=… N=… RS=… BV=…)`          | carte de modèle de diode                                                 |
-| `Qname c b e [sub] [model] [area] [K=v…]`    | transistor bipolaire (voir [transistors](./transistors.md))              |
-| `Mname d g s [b] model [W=w] [L=l] [K=v…]`   | MOSFET, substrat relié à la source s'il est omis                         |
-| `.model name NPN                             | PNP(IS=… BF=… VAF=…)`                                                    | carte de modèle bipolaire         |
-| `.model name NMOS                            | PMOS(VTO=… KP=… LAMBDA=…)`                                               | carte de modèle MOSFET (niveau 1) |
+| Ligne                                                                | Composant                                                                |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `Rname n1 n2 value`                                                  | résistance (Ω)                                                           |
+| `Cname n1 n2 value [IC=v]`                                           | condensateur (F), tension initiale                                       |
+| `Lname n1 n2 value [IC=i]`                                           | bobine (H), courant initial                                              |
+| `Vname n+ n- [DC v] [AC mag [phase]] [wave]`                         | source de tension indépendante                                           |
+| `Iname n+ n- [DC i] [AC mag [phase]] [wave]`                         | source de courant indépendante                                           |
+| `Ename n+ n- nc+ nc- gain`                                           | source de tension commandée en tension                                   |
+| `Gname n+ n- nc+ nc- gm`                                             | source de courant commandée en tension                                   |
+| `Fname n+ n- Vctrl gain`                                             | source de courant commandée en courant                                   |
+| `Hname n+ n- Vctrl r`                                                | source de tension commandée en courant                                   |
+| `Bname n+ n- V=expr` / `I=expr`                                      | source comportementale (voir [guide](./behavioral-sources.md))           |
+| `Kname L1 L2 k`                                                      | bobines couplées, `0 < k ≤ 1`                                            |
+| `Xname in+ in- out OPAMP [GAIN=a] [GBW=f] [VSAT=v \| VPOS=v VNEG=v]` | amplificateur opérationnel _(extension ElecMap)_                         |
+| `Xname node… NAME [K=v…]`                                            | instance de sous-circuit (voir [plus bas](#sous-circuits-et-paramètres)) |
+| `Sname n1 n2 ON\|OFF [RON=r] [ROFF=r]`                               | interrupteur à état fixe _(extension ElecMap)_                           |
+| `Dname anode cathode [model] [area] [K=v…]`                          | diode, Zener (voir [diodes](./diodes.md))                                |
+| `.model name D(IS=… N=… RS=… BV=…)`                                  | carte de modèle de diode                                                 |
+| `Qname c b e [sub] [model] [area] [K=v…]`                            | transistor bipolaire (voir [transistors](./transistors.md))              |
+| `Mname d g s [b] model [W=w] [L=l] [K=v…]`                           | MOSFET, substrat relié à la source s'il est omis                         |
+| `.model name NPN                                                     | PNP(IS=… BF=… VAF=…)`                                                    | carte de modèle bipolaire         |
+| `.model name NMOS                                                    | PMOS(VTO=… KP=… LAMBDA=…)`                                               | carte de modèle MOSFET (niveau 1) |
 
 Un nombre seul après les nœuds d'une source est sa valeur continue (`V1 a 0 5`). Les phases sont en degrés.
 
@@ -210,7 +210,7 @@ amp.toCir({ analysis: [".ac dec 50 10 10meg", ".tran 3m"] });
 Ce que `toCir` traduit :
 
 - **Noms :** un élément commence par la lettre de ce qu'il devient (`X1` ci-dessus est une source `E`, `EX1`), les noms issus des sous-circuits perdent leurs points (`X1.R1` → `RX1_R1`), les nœuds gardent lettres, chiffres et `_`, et la masse est `0` (`gnd` compris). Les noms restent uniques, sans tenir compte de la casse.
-- **AOP :** idéal → source commandée en tension de gain 10⁶ ; avec `GBW` → sous-circuit à un pôle (`OPAMP_X1`), même réponse que dans ElecMap.
+- **AOP :** idéal → source commandée en tension de gain 10⁶ ; avec `GBW` → sous-circuit à un pôle (`OPAMP_X1`), même réponse que dans ElecMap ; avec rails → sous-circuit dont l'étage de gain est `B1 y 0 V=mid+half*tanh(…)`.
 - **Interrupteurs :** fermé → source de 0 V (ou résistance `RON`), ouvert → résistance `ROFF`, ou rien si `ROFF` est infini.
 - **Sources :** `STEP` → `PWL` avec une montée de 1 ns ; la forme d'onde précède `AC` (l'ordre qu'écrit LTspice).
 - **Composants :** paramètres en ligne → une carte `.model` par jeu distinct (`DMOD`, `NPNMOD`…) ; les modèles nommés gardent leur nom, `W`/`L` restent sur la ligne du MOSFET.
@@ -234,7 +234,7 @@ asc.split("\n").at(-2);
 // "TEXT -64 704 Left 2 !.model DMOD D(IS=10f)\\n.lib opamp.sub\\n.tran 3m"
 ```
 
-- Les AOP utilisent le symbole et le modèle `opamp` de LTspice (`.lib opamp.sub`, `Aol` et `GBW` ; un AOP idéal reçoit `Aol=1meg GBW=1t`).
+- Les AOP utilisent le symbole et le modèle `opamp` de LTspice (`.lib opamp.sub`, `Aol` et `GBW` ; un AOP idéal reçoit `Aol=1meg GBW=1t`). Ce modèle n'a pas de rails : un AOP avec rails garde son sous-circuit `OPAMP_X1`.
 - Les fils ne se touchent que par leurs extrémités. Le dessin est vérifié par rapport à la netlist avant d'être écrit, et un nœud que LTspice lirait autrement est relié par des étiquettes plutôt que par des fils.
 - Les couplages `K` et les interrupteurs ouverts n'ont pas de symbole : ils sont écrits en directive et en commentaire.
 

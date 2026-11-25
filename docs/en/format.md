@@ -41,28 +41,28 @@ Examples: `1k`, `4.7u`, `100nF`, `1e-3`, `2MEG`. The European notation is suppor
 
 ### Elements
 
-| Line                                         | Component                                                      |
-| -------------------------------------------- | -------------------------------------------------------------- |
-| `Rname n1 n2 value`                          | resistor (Ω)                                                   |
-| `Cname n1 n2 value [IC=v]`                   | capacitor (F), initial voltage                                 |
-| `Lname n1 n2 value [IC=i]`                   | inductor (H), initial current                                  |
-| `Vname n+ n- [DC v] [AC mag [phase]] [wave]` | independent voltage source                                     |
-| `Iname n+ n- [DC i] [AC mag [phase]] [wave]` | independent current source                                     |
-| `Ename n+ n- nc+ nc- gain`                   | voltage-controlled voltage source                              |
-| `Gname n+ n- nc+ nc- gm`                     | voltage-controlled current source                              |
-| `Fname n+ n- Vctrl gain`                     | current-controlled current source                              |
-| `Hname n+ n- Vctrl r`                        | current-controlled voltage source                              |
-| `Bname n+ n- V=expr` / `I=expr`              | behavioural source (see [guide](./behavioral-sources.md))      |
-| `Kname L1 L2 k`                              | coupled inductors, `0 < k ≤ 1`                                 |
-| `Xname in+ in- out OPAMP [GAIN=a] [GBW=f]`   | op-amp _(ElecMap extension)_                                   |
-| `Xname node… NAME [K=v…]`                    | subcircuit instance (see [below](#subcircuits-and-parameters)) |
-| `Sname n1 n2 ON\|OFF [RON=r] [ROFF=r]`       | fixed-state switch _(ElecMap extension)_                       |
-| `Dname anode cathode [model] [area] [K=v…]`  | diode, Zener (see [diodes](./diodes.md))                       |
-| `.model name D(IS=… N=… RS=… BV=…)`          | diode model card                                               |
-| `Qname c b e [sub] [model] [area] [K=v…]`    | bipolar transistor (see [transistors](./transistors.md))       |
-| `Mname d g s [b] model [W=w] [L=l] [K=v…]`   | MOSFET, bulk tied to the source if omitted                     |
-| `.model name NPN                             | PNP(IS=… BF=… VAF=…)`                                          | bipolar model card          |
-| `.model name NMOS                            | PMOS(VTO=… KP=… LAMBDA=…)`                                     | MOSFET model card (level 1) |
+| Line                                                                 | Component                                                      |
+| -------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `Rname n1 n2 value`                                                  | resistor (Ω)                                                   |
+| `Cname n1 n2 value [IC=v]`                                           | capacitor (F), initial voltage                                 |
+| `Lname n1 n2 value [IC=i]`                                           | inductor (H), initial current                                  |
+| `Vname n+ n- [DC v] [AC mag [phase]] [wave]`                         | independent voltage source                                     |
+| `Iname n+ n- [DC i] [AC mag [phase]] [wave]`                         | independent current source                                     |
+| `Ename n+ n- nc+ nc- gain`                                           | voltage-controlled voltage source                              |
+| `Gname n+ n- nc+ nc- gm`                                             | voltage-controlled current source                              |
+| `Fname n+ n- Vctrl gain`                                             | current-controlled current source                              |
+| `Hname n+ n- Vctrl r`                                                | current-controlled voltage source                              |
+| `Bname n+ n- V=expr` / `I=expr`                                      | behavioural source (see [guide](./behavioral-sources.md))      |
+| `Kname L1 L2 k`                                                      | coupled inductors, `0 < k ≤ 1`                                 |
+| `Xname in+ in- out OPAMP [GAIN=a] [GBW=f] [VSAT=v \| VPOS=v VNEG=v]` | op-amp _(ElecMap extension)_                                   |
+| `Xname node… NAME [K=v…]`                                            | subcircuit instance (see [below](#subcircuits-and-parameters)) |
+| `Sname n1 n2 ON\|OFF [RON=r] [ROFF=r]`                               | fixed-state switch _(ElecMap extension)_                       |
+| `Dname anode cathode [model] [area] [K=v…]`                          | diode, Zener (see [diodes](./diodes.md))                       |
+| `.model name D(IS=… N=… RS=… BV=…)`                                  | diode model card                                               |
+| `Qname c b e [sub] [model] [area] [K=v…]`                            | bipolar transistor (see [transistors](./transistors.md))       |
+| `Mname d g s [b] model [W=w] [L=l] [K=v…]`                           | MOSFET, bulk tied to the source if omitted                     |
+| `.model name NPN                                                     | PNP(IS=… BF=… VAF=…)`                                          | bipolar model card          |
+| `.model name NMOS                                                    | PMOS(VTO=… KP=… LAMBDA=…)`                                     | MOSFET model card (level 1) |
 
 A bare number after the nodes of a source is its DC value (`V1 a 0 5`). Phases are in degrees.
 
@@ -210,7 +210,7 @@ amp.toCir({ analysis: [".ac dec 50 10 10meg", ".tran 3m"] });
 What `toCir` translates:
 
 - **Names:** an element starts with the letter of what it becomes (`X1` above is an `E` source, `EX1`), flattened subcircuit names lose their dots (`X1.R1` → `RX1_R1`), nodes keep letters, digits and `_`, and the ground is `0` (`gnd` included). Names stay unique, case aside.
-- **Op-amps:** ideal → a voltage-controlled source of gain 10⁶; with `GBW` → a subcircuit with one pole (`OPAMP_X1`), same response as in ElecMap.
+- **Op-amps:** ideal → a voltage-controlled source of gain 10⁶; with `GBW` → a subcircuit with one pole (`OPAMP_X1`), same response as in ElecMap; with rails → a subcircuit whose gain stage is `B1 y 0 V=mid+half*tanh(…)`.
 - **Switches:** closed → a 0 V source (or a resistor `RON`), open → a resistor `ROFF`, or nothing when `ROFF` is infinite.
 - **Sources:** `STEP` → `PWL` with a 1 ns rise; the waveform comes before `AC` (the order LTspice writes).
 - **Devices:** inline parameters → one `.model` card per distinct set (`DMOD`, `NPNMOD`…); named models keep their name, `W`/`L` stay on the MOSFET line.
@@ -234,7 +234,7 @@ asc.split("\n").at(-2);
 // "TEXT -64 704 Left 2 !.model DMOD D(IS=10f)\\n.lib opamp.sub\\n.tran 3m"
 ```
 
-- Op-amps use LTspice's `opamp` symbol and model (`.lib opamp.sub`, `Aol` and `GBW`; an ideal op-amp gets `Aol=1meg GBW=1t`).
+- Op-amps use LTspice's `opamp` symbol and model (`.lib opamp.sub`, `Aol` and `GBW`; an ideal op-amp gets `Aol=1meg GBW=1t`). That model has no rails: an op-amp with rails keeps its `OPAMP_X1` subcircuit.
 - Wires only touch at their ends. The drawing is checked against the netlist before it is written, and a net that LTspice would read differently is joined by labels instead of wires.
 - `K` couplings and open switches have no symbol: they are written as a directive and a comment.
 

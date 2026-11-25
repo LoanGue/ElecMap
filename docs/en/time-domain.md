@@ -123,6 +123,41 @@ const d = discharge.transient({ tStop: 5e-3 });
 d.voltage("a"); // starts at 5 V, decays with τ = 1 ms
 ```
 
+## Op-amp saturation: a Schmitt trigger
+
+`VSAT=v` (or `VPOS=v VNEG=v`) bounds an op-amp output: it saturates smoothly between the rails, a non-linear element solved by Newton-Raphson. In an inverting Schmitt trigger, the positive feedback `R1`, `R2` sets the thresholds at `±VSAT·R1/(R1 + R2) = ±7.5 V`:
+
+```ts
+const netlist = (v1: string) => `
+V1 n1 0 ${v1}
+R3 in n1 1k
+X1 n2 in out OPAMP VSAT=15
+R2 n2 out 1k
+R1 n2 0 1k
+`;
+new ElecMap(netlist("DC 5")).operatingPoint().voltage("out"); // -15.000025
+new ElecMap(netlist("DC -5")).operatingPoint().voltage("out"); // 15.000025
+
+const r = new ElecMap(netlist("SIN(0 10 1)")).transient({ tStop: 2, tStep: 1e-3 });
+const vin = r.voltage("n1");
+const out = r.voltage("out");
+r.time
+  .map((t, i) => [t, vin[i], out[i]])
+  .filter(([, , o], i) => i > 1 && Math.sign(o) !== Math.sign(out[i - 1]));
+// [[0.635, -7.5, 15], [1.135, 7.5, -15], [1.635, -7.5, 15]]   (s, V, V; rounded)
+```
+
+- Inside the hysteresis band both outputs are solutions. The DC solve starts from 0 V: the output goes to the rail opposite to the input.
+- An ideal op-amp with rails uses an open-loop gain of 10⁶. It needs no extra dynamics: each Newton solve starts from the open-loop response to the inputs, so the output switches within one time step when a threshold is crossed.
+- With `GBW`, the output follows the pole `A/(2π·GBW)` behind a saturated gain stage, so it slews at about `VSAT·2π·GBW/A` (940 V/s for `GAIN=1e5 GBW=1e6`).
+- Small-signal analyses are linearised at the operating point: a saturated op-amp has a gain of about 0.
+
+```ts
+const amp = new ElecMap("V1 p 0 10\nX1 p m out OPAMP GAIN=1e5 VSAT=15\nR2 m out 1k\nR1 m 0 1k");
+amp.operatingPoint().voltage("out"); // 15.0000005
+amp.transferFunction("out").dcGain(); // 2e-7
+```
+
 ## Waveforms
 
 | SPICE                                       | JSON `kind` | Shape                             |
