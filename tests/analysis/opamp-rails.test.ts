@@ -33,6 +33,16 @@ describe("op-amp rails: parsing and export", () => {
     expect(() => new ElecMap("V1 a 0 1\nR1 a b 1k\nX1 0 b c OPAMP VPOS=0 VNEG=5")).toThrow(
       ElecMapError,
     );
+    const json = (rails: object) => ({
+      components: [
+        { id: "V1", type: "vsource", nodes: ["a", "0"], dc: 1 },
+        { id: "X1", type: "opamp", nodes: ["a", "out", "out"], ...rails },
+      ],
+    });
+    expect(() => new ElecMap(json({ vpos: 5 }) as never)).toThrow(/go together/);
+    expect(
+      new ElecMap(json({ vpos: 5, vneg: 0 }) as never).operatingPoint().voltage("out"),
+    ).toBeCloseTo(1, 4);
   });
 
   it("keeps the rails through SPICE, .cir and .asc exports", () => {
@@ -74,6 +84,38 @@ describe("op-amp rails: analyses", () => {
     expect(out(10, "VPOS=5 VNEG=0")).toBeCloseTo(5, 3);
   });
 
+  it("does not stop on small Newton steps near a rail (residual check)", () => {
+    // Exact output of the x2 amplifier near the knee: out = 2·(vin − (15/A)·atanh(out/15)).
+    const exact = (vin: number, a: number) => {
+      let [lo, hi] = [0, 15];
+      for (let k = 0; k < 200; k++) {
+        const m = (lo + hi) / 2;
+        if (m < 2 * (vin - (15 / a) * Math.atanh(m / 15))) lo = m;
+        else hi = m;
+      }
+      return lo;
+    };
+    const out = (vin: number, a: number) =>
+      new ElecMap(amplifier(vin, `GAIN=${a} VSAT=15`)).operatingPoint().voltage("out");
+    // Without the check: 14.181 (above 2·vin) and 15.000.
+    expect(out(7, 1e5)).toBeCloseTo(exact(7, 1e5), 4);
+    expect(out(7, 1e3)).toBeCloseTo(exact(7, 1e3), 4);
+  });
+
+  it("follows the input inside the rails in a transient, and clips at them", () => {
+    const c = new ElecMap(`V1 p 0 SIN(0 10 50)
+X1 p m out OPAMP GAIN=1e5 VSAT=15
+R2 m out 1k
+R1 m 0 1k`);
+    const r = c.transient({ tStop: 0.02, tStep: 2e-5 });
+    const vin = r.voltage("p");
+    r.voltage("out").forEach((v, i) => {
+      const ideal = 2 * (vin[i] as number);
+      if (Math.abs(ideal) < 14) expect(v).toBeCloseTo(ideal, 2);
+      if (Math.abs(ideal) > 16) expect(Math.abs(v)).toBeCloseTo(15, 3);
+    });
+  });
+
   it("has an AC gain of about 0 when saturated, and the usual one otherwise", () => {
     const gain = (vin: number) =>
       new ElecMap(amplifier(vin, "GAIN=1e5 VSAT=15")).transferFunction("out").dcGain();
@@ -97,9 +139,15 @@ describe("op-amp rails: analyses", () => {
         switches.push({ vin: vin[i] as number, to: Math.sign(out[i] as number) });
       }
     }
-    // The first switch leaves the unstable 0 V start; then −7.5 V (up) and +7.5 V (down).
+    // From i = 2: the jump away from the unstable 0 V start (i = 1) is not counted.
+    // Up at −7.5 V, down at +7.5 V, then up again.
     expect(switches.map((s) => s.to)).toEqual([1, -1, 1]);
-    for (const s of switches) expect(s.vin).toBeCloseTo(-7.5 * s.to, 2);
+    // Detected at the first sample past the threshold: within one step of the input.
+    const step = 10 * 2 * Math.PI * 1e-3;
+    for (const s of switches) {
+      expect(-s.to * s.vin).toBeGreaterThanOrEqual(7.5);
+      expect(-s.to * s.vin).toBeLessThan(7.5 + step);
+    }
     expect(Math.max(...out)).toBeCloseTo(15, 3);
   });
 });
