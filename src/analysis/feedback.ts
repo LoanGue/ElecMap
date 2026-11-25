@@ -1,4 +1,5 @@
 import { compile } from "../core/circuit";
+import { ElecMapError } from "../core/errors";
 import type { CircuitJSON, ComponentJSON } from "../format/types";
 import type { ValidationIssue } from "../format/validate";
 import { MnaSystem } from "../mna/system";
@@ -16,7 +17,8 @@ export const CHECK_OPAMP = { gain: 1e5, gbw: 1e6 } as const;
  * The same transfer function is computed with each ideal op-amp replaced by
  * {@link CHECK_OPAMP} (rails ignored, other devices linearised at their
  * operating point). Right-half-plane poles there give a `POSITIVE_FEEDBACK`
- * warning. Without ideal op-amps, or if the check itself fails, returns `[]`.
+ * warning. Without ideal op-amps, or if the check fails with an
+ * {@link ElecMapError}, returns `[]`; other errors are rethrown.
  */
 export function feedbackWarnings(system: MnaSystem, options: TransferOptions): ValidationIssue[] {
   const doc = system.circuit.toJSON();
@@ -29,8 +31,10 @@ export function feedbackWarnings(system: MnaSystem, options: TransferOptions): V
     unstable = transferFunction(linear, options)
       .poles()
       .some((p) => p.re > 1e-9 * Math.max(1, p.abs()));
-  } catch {
-    return [];
+  } catch (e) {
+    // The check could not run (no DC solution, singular system…): nothing to report.
+    if (e instanceof ElecMapError) return [];
+    throw e;
   }
   if (!unstable) return [];
   const ids = ideal.map((c) => c.id).join(", ");
