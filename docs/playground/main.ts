@@ -389,7 +389,10 @@ function fixSelections(): void {
   if (!nodes.includes(state.output)) state.output = guess;
   if (state.reference !== "" && !nodes.includes(state.reference)) state.reference = "";
   if (!ids.includes(state.outCurrent)) state.outCurrent = ids[0] ?? "";
-  if (state.input !== "" && !sources.includes(state.input)) state.input = "";
+  const inputOk =
+    sources.includes(state.input) ||
+    (state.input.startsWith(VOLTAGE) && nodes.includes(state.input.slice(VOLTAGE.length)));
+  if (state.input !== "" && !inputOk) state.input = "";
   state.traces = state.traces.filter((n) => nodes.includes(n));
   state.currents = state.currents.filter((id) => ids.includes(id));
   if (state.traces.length === 0 && state.currents.length === 0) {
@@ -399,6 +402,9 @@ function fixSelections(): void {
   if (state.zB !== ground && !nodes.includes(state.zB)) state.zB = ground;
   if (selected !== undefined && !ids.includes(selected)) selected = undefined;
 }
+
+/** Prefix of an input that is a node voltage (`v:in`) rather than a source id. */
+const VOLTAGE = "v:";
 
 function sourceIds(): string[] {
   return (circuit?.components() ?? [])
@@ -706,6 +712,9 @@ function transferPanel(c: ElecMap): string {
   <label>${t.input}
     <select data-bind="input">${option("", `${t.auto}`, state.input)}${sourceIds()
       .map((id) => option(id, id, state.input))
+      .join("")}${nodes
+      .filter((n) => n !== state.output)
+      .map((n) => option(`${VOLTAGE}${n}`, `V(${n})`, state.input))
       .join("")}</select></label>
   <label>${t.output}
     <select data-bind="outKind">${option("voltage", t.outputVoltage, state.outKind)}${option(
@@ -732,12 +741,17 @@ function transferPanel(c: ElecMap): string {
   </div>
 </div>`;
 
-  const spec = { output: outputSpec(), ...(state.input ? { input: state.input } : {}) };
-  const H = c.transferFunction(spec);
+  const node = state.input.startsWith(VOLTAGE) ? state.input.slice(VOLTAGE.length) : "";
+  const source = node ? "" : state.input;
+  const spec = { output: outputSpec(), ...(source ? { input: source } : {}) };
+  const full: TransferOptions = node ? { ...spec, input: { voltage: node } } : spec;
+  const H = c.transferFunction(full);
   const name = state.outKind === "current" ? "\\frac{I(s)}{V_{in}(s)}" : "H(s)";
   let latex = `${name} = ${H.toLatex()}`;
   let literalNote = "";
-  if (state.literal) {
+  if (state.literal && node) {
+    literalNote = `<p class="pg-note">${t.literalUnavailable}: V(${esc(node)})</p>`;
+  } else if (state.literal) {
     try {
       latex = `${name} = ${c.symbolicTransferFunction(spec).toLatex()}`;
     } catch (err) {
@@ -748,7 +762,7 @@ function transferPanel(c: ElecMap): string {
 <div class="pg-math" data-tex="${esc(latex)}"></div>${literalNote}
 ${metrics(H)}
 ${bodeControls(true)}
-${state.mc ? monteCarloBode(c, spec, H) : bodePlot(H)}`;
+${state.mc ? monteCarloBode(c, full, H) : bodePlot(H)}`;
 }
 
 /** Tolerances of the Monte-Carlo controls: R, C and L by kind, plus "id[.field] percent" entries. */
