@@ -1,6 +1,6 @@
 # ElecMap
 
-[![CI](https://github.com/LoanGue/ElecMap/actions/workflows/ci.yml/badge.svg)](https://github.com/LoanGue/ElecMap/actions/workflows/ci.yml)
+[![pr-gate](https://github.com/LoanGue/ElecMap/actions/workflows/pr-gate.yml/badge.svg)](https://github.com/LoanGue/ElecMap/actions/workflows/pr-gate.yml)
 [![Docs](https://img.shields.io/badge/docs-API-blue.svg)](https://loangue.github.io/ElecMap/)
 [![Playground](https://img.shields.io/badge/try-playground-2563eb.svg)](https://loangue.github.io/ElecMap/playground/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
