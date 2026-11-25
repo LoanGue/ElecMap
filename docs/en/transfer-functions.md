@@ -57,6 +57,7 @@ stage
 ```
 
 The voltage must depend on the source; otherwise the ratio is undefined and an `INVALID_ARGUMENT` error is thrown.
+When the circuit has a single AC source, that source drives, as for a source input.
 
 Without `source`, a circuit with several sources still works: every source that reaches the input voltage is tried, and the ratio is kept when they all give the same one. That is the case for sources in series, for instance harmonics summed into `ve`. When the ratio depends on which source drives, an `INVALID_ARGUMENT` error names the sources and `source` must be given.
 

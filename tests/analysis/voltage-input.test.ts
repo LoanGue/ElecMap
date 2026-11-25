@@ -84,6 +84,13 @@ describe("transfer function between two voltages", () => {
     );
   });
 
+  it("refuses a voltage that no source reaches", () => {
+    const c = ElecMap.fromSpice("V1 a 0 DC 1\nV2 b 0 DC 1\nR1 a 0 1k\nR2 b 0 1k\nR3 z 0 1k");
+    expect(() => c.transferFunction({ input: { voltage: "z" }, output: "a" })).toThrow(
+      /does not depend on any source/,
+    );
+  });
+
   it("refuses a voltage the source does not reach", () => {
     const c = ElecMap.fromSpice("V1 a 0 AC 1\nR1 a out 1k\nR2 out 0 1k\nR3 z 0 1k\n");
     expect(() => c.transferFunction({ input: { voltage: "z" }, output: "out" })).toThrow(

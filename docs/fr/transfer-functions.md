@@ -57,6 +57,7 @@ stage
 ```
 
 La tension doit dépendre de la source ; sinon le rapport n'est pas défini et une erreur `INVALID_ARGUMENT` est levée.
+Quand le circuit a une seule source AC, c'est elle qui attaque, comme pour une entrée de type source.
 
 Sans `source`, un circuit à plusieurs sources fonctionne aussi : chaque source qui atteint la tension d'entrée est essayée, et le rapport est retenu quand toutes donnent le même. C'est le cas de sources en série, par exemple des harmoniques additionnées dans `ve`. Quand le rapport dépend de la source qui attaque, une erreur `INVALID_ARGUMENT` nomme les sources et `source` doit être précisé.
 

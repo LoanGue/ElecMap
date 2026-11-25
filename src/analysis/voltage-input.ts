@@ -49,7 +49,12 @@ function cancel(top: Complex[], bottom: Complex[]): [Complex[], Complex[]] {
   return kept;
 }
 
-/** Points where two candidate ratios are compared (rad/s, spread over decades). */
+/**
+ * Points where two candidate ratios are compared: one every two decades from
+ * 0.1 rad/s to 10 Mrad/s, which covers audio to RF circuits. Each ratio is
+ * rebuilt from its roots, so they agree to about 1e-9; 1e-6 leaves margin while
+ * still telling apart ratios that differ in any visible way.
+ */
 const PROBES = [1e-1, 1e1, 1e3, 1e5, 1e7].map((w) => new Complex(0, w));
 
 const sameRatio = (a: TransferFunction, b: TransferFunction): boolean =>
@@ -83,6 +88,9 @@ export function voltageRatio(
     );
   }
   const ids = independentSources(system);
+  if (ids.length === 0) {
+    throw new ElecMapError("INVALID_ARGUMENT", "The circuit has no independent source to drive it");
+  }
   const found = ids.flatMap((id) => {
     const h = ratioFor(system, out, inp, id);
     return h ? [{ id, h }] : [];
