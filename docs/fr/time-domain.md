@@ -123,6 +123,41 @@ const d = discharge.transient({ tStop: 5e-3 });
 d.voltage("a"); // part de 5 V, décroît avec τ = 1 ms
 ```
 
+## Saturation d'un AOP : un trigger de Schmitt
+
+`VSAT=v` (ou `VPOS=v VNEG=v`) borne la sortie d'un AOP : elle sature progressivement entre les rails, un élément non linéaire résolu par Newton-Raphson. Dans un trigger de Schmitt inverseur, la réaction positive `R1`, `R2` place les seuils à `±VSAT·R1/(R1 + R2) = ±7,5 V` :
+
+```ts
+const netlist = (v1: string) => `
+V1 n1 0 ${v1}
+R3 in n1 1k
+X1 n2 in out OPAMP VSAT=15
+R2 n2 out 1k
+R1 n2 0 1k
+`;
+new ElecMap(netlist("DC 5")).operatingPoint().voltage("out"); // -15.000025
+new ElecMap(netlist("DC -5")).operatingPoint().voltage("out"); // 15.000025
+
+const r = new ElecMap(netlist("SIN(0 10 1)")).transient({ tStop: 2, tStep: 1e-3 });
+const vin = r.voltage("n1");
+const out = r.voltage("out");
+r.time
+  .map((t, i) => [t, vin[i], out[i]])
+  .filter(([, , o], i) => i > 1 && Math.sign(o) !== Math.sign(out[i - 1]));
+// [[0.635, -7.5, 15], [1.135, 7.5, -15], [1.635, -7.5, 15]]   (s, V, V; rounded)
+```
+
+- Dans la bande d'hystérésis, les deux sorties sont solutions. Le calcul DC part de 0 V : la sortie va au rail opposé à l'entrée.
+- Un AOP idéal avec rails utilise un gain en boucle ouverte de 10⁶. Aucune dynamique supplémentaire n'est nécessaire : chaque résolution de Newton part de la réponse en boucle ouverte aux entrées, donc la sortie bascule en un pas de temps au franchissement d'un seuil.
+- Avec `GBW`, la sortie suit le pôle `A/(2π·GBW)` derrière un étage de gain saturé : sa vitesse de balayage vaut environ `VSAT·2π·GBW/A` (940 V/s pour `GAIN=1e5 GBW=1e6`).
+- Les analyses petit signal sont linéarisées au point de fonctionnement : un AOP saturé a un gain d'environ 0.
+
+```ts
+const amp = new ElecMap("V1 p 0 10\nX1 p m out OPAMP GAIN=1e5 VSAT=15\nR2 m out 1k\nR1 m 0 1k");
+amp.operatingPoint().voltage("out"); // 15.0000005
+amp.transferFunction("out").dcGain(); // 2e-7
+```
+
 ## Formes d'onde
 
 | SPICE                                       | `kind` JSON | Forme                                         |

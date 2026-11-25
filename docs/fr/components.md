@@ -39,12 +39,12 @@ Le courant de commande de `cccs` / `ccvs` est le courant qui traverse une source
 
 ## Composants actifs et de commutation
 
-| Type     | SPICE        | `nodes`           | Champs                                                         |
-| -------- | ------------ | ----------------- | -------------------------------------------------------------- |
-| `opamp`  | `X… OPAMP`   | `[in+, in-, out]` | `gain?` gain en boucle ouverte, `gbw?` produit gain-bande (Hz) |
-| `switch` | `S… ON\|OFF` | `[a, b]`          | `closed`, `ron?` (0 par défaut), `roff?` (∞ par défaut)        |
+| Type     | SPICE        | `nodes`           | Champs                                                                                                |
+| -------- | ------------ | ----------------- | ----------------------------------------------------------------------------------------------------- |
+| `opamp`  | `X… OPAMP`   | `[in+, in-, out]` | `gain?` gain en boucle ouverte, `gbw?` produit gain-bande (Hz), `vpos?` / `vneg?` rails de sortie (V) |
+| `switch` | `S… ON\|OFF` | `[a, b]`          | `closed`, `ron?` (0 par défaut), `roff?` (∞ par défaut)                                               |
 
-- **Amplificateur opérationnel :** idéal (court-circuit virtuel entre les entrées, impédance d'entrée infinie, impédance de sortie nulle) lorsque `gain` est omis. Avec `gain`, la sortie vaut `A·(V+ − V−)` ; ajouter `gbw` donne un modèle à un pôle `A / (1 + s·A/(2π·GBW))`. La sortie est référencée à la masse.
+- **Amplificateur opérationnel :** idéal (court-circuit virtuel entre les entrées, impédance d'entrée infinie, impédance de sortie nulle) lorsque `gain` est omis. Avec `gain`, la sortie vaut `A·(V+ − V−)` ; ajouter `gbw` donne un modèle à un pôle `A / (1 + s·A/(2π·GBW))`. La sortie est référencée à la masse. Avec `vpos` et `vneg` (SPICE `VSAT=v` ou `VPOS=v VNEG=v`), la sortie sature progressivement entre les rails : voir [un trigger de Schmitt](./time-domain.md).
 - **Interrupteur :** un interrupteur à état fixe, utile pour comparer des configurations. Il n'est pas commandé en tension.
 
 ## Composants non linéaires

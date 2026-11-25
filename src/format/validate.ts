@@ -22,7 +22,8 @@ export type IssueCode =
   | "VOLTAGE_SOURCE_LOOP"
   | "INDUCTOR_LOOP"
   | "SHORTED_COMPONENT"
-  | "DANGLING_NODE";
+  | "DANGLING_NODE"
+  | "POSITIVE_FEEDBACK";
 
 /** A problem found while validating a circuit. */
 export interface ValidationIssue {

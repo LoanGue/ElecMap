@@ -169,6 +169,24 @@ rlc.timeConstants(); // [0.001]   (s, 1/|Re p|)
 rlc.order; // 2
 ```
 
+### Positive feedback warning
+
+An ideal op-amp has no dynamics, so the transfer function of a circuit in positive feedback looks stable: this Schmitt trigger gives `H = 2`. `transferWarnings` (same arguments as `transferFunction`) computes the same function with each ideal op-amp as `GAIN=1e5 GBW=1e6`, and returns a `POSITIVE_FEEDBACK` warning when it has right-half-plane poles. The playground's Transfer panel shows it.
+
+```ts
+const schmitt = new ElecMap(`
+V1 n1 0 1
+R3 in n1 1k
+X1 n2 in out OPAMP
+R2 n2 out 1k
+R1 n2 0 1k
+`);
+schmitt.transferFunction("out").dcGain(); // 2
+schmitt.transferWarnings("out");
+// [{ severity: "warning", code: "POSITIVE_FEEDBACK", componentId: "X1",
+//    message: "Unstable with a real op-amp (X1 as GAIN=1e5 GBW=1e6): positive feedback, the linear result has no physical meaning" }]
+```
+
 ## Response to a sine
 
 `apply` gives the steady-state output for a sine (or a sum of sines) at the input:

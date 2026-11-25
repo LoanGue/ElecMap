@@ -169,6 +169,24 @@ rlc.timeConstants(); // [0.001]   (s, 1/|Re p|)
 rlc.order; // 2
 ```
 
+### Avertissement de réaction positive
+
+Un AOP idéal n'a pas de dynamique : la fonction de transfert d'un circuit en réaction positive paraît stable, ce trigger de Schmitt donne `H = 2`. `transferWarnings` (mêmes arguments que `transferFunction`) calcule la même fonction avec chaque AOP idéal en `GAIN=1e5 GBW=1e6`, et renvoie un avertissement `POSITIVE_FEEDBACK` si elle a des pôles à partie réelle positive. Le panneau Transfert du playground l'affiche.
+
+```ts
+const schmitt = new ElecMap(`
+V1 n1 0 1
+R3 in n1 1k
+X1 n2 in out OPAMP
+R2 n2 out 1k
+R1 n2 0 1k
+`);
+schmitt.transferFunction("out").dcGain(); // 2
+schmitt.transferWarnings("out");
+// [{ severity: "warning", code: "POSITIVE_FEEDBACK", componentId: "X1",
+//    message: "Unstable with a real op-amp (X1 as GAIN=1e5 GBW=1e6): positive feedback, the linear result has no physical meaning" }]
+```
+
 ## Réponse à une sinusoïde
 
 `apply` donne la sortie en régime établi pour une sinusoïde (ou une somme de sinusoïdes) en entrée :
