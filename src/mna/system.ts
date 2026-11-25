@@ -93,7 +93,10 @@ export class MnaSystem {
       component: (id) => circuit.component(id),
     };
     for (const c of circuit.components) modelOf(c).stamp(c, ctx);
-    this.nonlinear = circuit.components.filter((c) => modelOf(c).load !== undefined);
+    this.nonlinear = circuit.components.filter((c) => {
+      const model = modelOf(c);
+      return model.load !== undefined && (model.nonlinear?.(c) ?? true);
+    });
     this.junctions = this.nonlinear.flatMap((c) =>
       (modelOf(c).junctions?.(c, ctx) ?? []).map((j) => ({ ...j, id: c.id })),
     );
@@ -139,6 +142,7 @@ export class MnaSystem {
    *
    * With `charge = a`, the junction charges are added as `a·Q(x)` (the
    * companion term of an integration step `a·(q − q_prev)`), linearised too.
+   * `first` marks the first iteration of a Newton solve.
    */
   load(
     matrix: number[][],
@@ -149,6 +153,7 @@ export class MnaSystem {
     initial = false,
     charge?: number,
     time = 0,
+    first = initial,
   ): boolean {
     let limited = false;
     for (const c of this.nonlinear) {
@@ -170,6 +175,7 @@ export class MnaSystem {
         },
         state,
         initial,
+        first,
         limited: () => (limited = true),
         gmin,
         time,

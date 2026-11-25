@@ -50,7 +50,17 @@ export function newtonSolve(
   for (let it = 1; it <= maxIterations; it++) {
     const M = A.map((row) => [...row]);
     const b = [...r];
-    const limited = system.load(M, b, x, states, DEVICE_GMIN, initial && it === 1, charge, time);
+    const limited = system.load(
+      M,
+      b,
+      x,
+      states,
+      DEVICE_GMIN,
+      initial && it === 1,
+      charge,
+      time,
+      it === 1,
+    );
     let next: number[];
     try {
       next = new RealLU(M, 0).solve(b);

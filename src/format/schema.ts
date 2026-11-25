@@ -163,6 +163,8 @@ export const CIRCUIT_SCHEMA = {
             nodes: { type: "array", items: node, minItems: 3, maxItems: 3 },
             gain: positive,
             gbw: positive,
+            vpos: finite,
+            vneg: finite,
           }),
           component("coupling", ["inductors", "k"], {
             inductors: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 2 },

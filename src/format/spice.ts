@@ -16,7 +16,7 @@
  * | `Hname n+ n- Vctrl r` | CCVS |
  * | `Bname n+ n- V=expression` / `I=expression` | behavioural source |
  * | `Kname L1 L2 k` | coupled inductors |
- * | `Xname in+ in- out OPAMP [GAIN=a] [GBW=f]` | op-amp (ElecMap extension) |
+ * | `Xname in+ in- out OPAMP [GAIN=a] [GBW=f] [VSAT=v \| VPOS=v VNEG=v]` | op-amp (ElecMap extension) |
  * | `Sname n1 n2 ON\|OFF [RON=r] [ROFF=r]` | fixed switch (ElecMap extension) |
  * | `Dname anode cathode [model] [area] [IS=… N=… RS=… BV=…]` | diode / zener |
  * | `Qname c b e [substrate] model [area]` | bipolar transistor (`NPN` / `PNP` cards) |
@@ -741,6 +741,18 @@ function parseElement(
       const gbw = params.get("GBW");
       if (gain !== undefined) comp.gain = num(gain, `${id} GAIN`, line);
       if (gbw !== undefined) comp.gbw = num(gbw, `${id} GBW`, line);
+      const [vsat, vpos, vneg] = ["VSAT", "VPOS", "VNEG"].map((k) => params.get(k));
+      if (vsat !== undefined && (vpos !== undefined || vneg !== undefined))
+        fail(`${id}: VSAT excludes VPOS / VNEG`, line);
+      if ((vpos === undefined) !== (vneg === undefined))
+        fail(`${id}: VPOS and VNEG go together`, line);
+      if (vsat !== undefined) {
+        comp.vpos = Math.abs(num(vsat, `${id} VSAT`, line));
+        comp.vneg = -comp.vpos;
+      } else if (vpos !== undefined && vneg !== undefined) {
+        comp.vpos = num(vpos, `${id} VPOS`, line);
+        comp.vneg = num(vneg, `${id} VNEG`, line);
+      }
       return comp;
     }
     default:
@@ -1137,6 +1149,7 @@ export function componentToSpice(
         "OPAMP",
         ...(c.gain === undefined ? [] : [`GAIN=${formatSpice(c.gain)}`]),
         ...(c.gbw === undefined ? [] : [`GBW=${formatSpice(c.gbw)}`]),
+        ...railParams(c),
       ].join(" ");
     case "switch":
       return [
@@ -1177,4 +1190,11 @@ export function toSpice(circuit: CircuitJSON): string {
   }
   lines.push(".end");
   return lines.join("\n") + "\n";
+}
+
+/** `VSAT=` (symmetric rails) or `VPOS= VNEG=` of an op-amp, none without rails. */
+function railParams(c: Extract<ComponentJSON, { type: "opamp" }>): string[] {
+  if (c.vpos === undefined || c.vneg === undefined) return [];
+  if (c.vneg === -c.vpos) return [`VSAT=${formatSpice(c.vpos)}`];
+  return [`VPOS=${formatSpice(c.vpos)}`, `VNEG=${formatSpice(c.vneg)}`];
 }
