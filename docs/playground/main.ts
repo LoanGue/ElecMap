@@ -758,8 +758,12 @@ function transferPanel(c: ElecMap): string {
       literalNote = `<p class="pg-note">${t.literalUnavailable}: ${esc(message(err))}</p>`;
     }
   }
+  const warnings = c.transferWarnings(full).map((w) => `<li>${esc(w.message)}</li>`);
+  const warnBox = warnings.length
+    ? `<div class="pg-warn"><strong>${t.warnings}</strong><ul>${warnings.join("")}</ul></div>`
+    : "";
   return `${controls}
-<div class="pg-math" data-tex="${esc(latex)}"></div>${literalNote}
+<div class="pg-math" data-tex="${esc(latex)}"></div>${literalNote}${warnBox}
 ${metrics(H)}
 ${bodeControls(true)}
 ${state.mc ? monteCarloBode(c, full, H) : bodePlot(H)}`;
