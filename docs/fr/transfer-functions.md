@@ -58,6 +58,18 @@ stage
 
 La tension doit dépendre de la source ; sinon le rapport n'est pas défini et une erreur `INVALID_ARGUMENT` est levée.
 
+Sans `source`, un circuit à plusieurs sources fonctionne aussi : chaque source qui atteint la tension d'entrée est essayée, et le rapport est retenu quand toutes donnent le même. C'est le cas de sources en série, par exemple des harmoniques additionnées dans `ve`. Quand le rapport dépend de la source qui attaque, une erreur `INVALID_ARGUMENT` nomme les sources et `source` doit être précisé.
+
+```ts
+const sum = new ElecMap(`
+V1 ve m SIN(0 1 1k) AC 1
+V2 m 0 SIN(0 0.33 3k) AC 1
+R1 ve out 1k
+C1 out 0 1u`);
+sum.transferFunction({ input: { voltage: "ve" }, output: "out" }).toString();
+// "V(out)/V(ve): (1) / (1 + 0.001·s)"
+```
+
 ## L'afficher en LaTeX
 
 ```ts
