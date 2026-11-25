@@ -203,7 +203,16 @@ export function reroute(wires: Wire[], moves: Move[], ctx: RouteContext): Wire[]
       for (const j of chain) done.add(j);
       const dx = to.x - from.x;
       const dy = to.y - from.y;
-      if (moving.has(key(end)) || ((at.get(key(end))?.length ?? 0) === 1 && !fixed.has(key(end)))) {
+      const other = moves.find(([q]) => q.x === end.x && q.y === end.y)?.[1];
+      const sameShift = other && other.x - end.x === dx && other.y - end.y === dy;
+      const last = runs[chain[chain.length - 1] as number] as Wire;
+      if (other && !sameShift) {
+        // Both ends move, each its own way: draw the wire again between them.
+        const rules = rulesFor(from, to, chain, horizontal(last) ? "h" : "v");
+        added.push(...route(other, to, rules).wires);
+        continue;
+      }
+      if (sameShift || ((at.get(key(end))?.length ?? 0) === 1 && !fixed.has(key(end)))) {
         if (!moving.has(key(end))) keep.add(key({ x: end.x + dx, y: end.y + dy }));
         for (const j of chain) {
           const w = runs[j] as Wire;
@@ -211,7 +220,6 @@ export function reroute(wires: Wire[], moves: Move[], ctx: RouteContext): Wire[]
         }
         continue;
       }
-      const last = runs[chain[chain.length - 1] as number] as Wire;
       const rules = rulesFor(from, to, chain, horizontal(last) ? "h" : "v");
       let best = route(end, to, rules);
       const ids = at.get(key(end)) ?? [];

@@ -82,7 +82,8 @@ describe("playground re-routing", () => {
     });
     expect(shape(out)).toContain("0,0-4,0");
     expect(shape(out)).toContain("4,0-10,0");
-    expect(shape(out).some((s) => s.includes("4,0-4,"))).toBe(true);
+    expect(shape(out).some((s) => s.startsWith("4,0-4,"))).toBe(true);
+    expect(shape(out).some((s) => s.endsWith("-7,5"))).toBe(true);
   });
 
   it("moves a wire that ends nowhere along with its pin", () => {
@@ -105,5 +106,20 @@ describe("playground re-routing", () => {
   it("keeps a pin that sat on a ground connected to it", () => {
     const out = reroute([], [[p(0, 4), p(3, 4)]], { anchors: [p(0, 4)], blocked: none });
     expect(shape(out)).toEqual(["0,4-3,4"]);
+  });
+  it("routes a wire again between two pins that move apart", () => {
+    const out = reroute(
+      [w(0, 0, 0, 2), w(0, 2, 4, 2), w(4, 2, 4, 0)],
+      [
+        [p(0, 0), p(1, 0)],
+        [p(4, 0), p(4, 3)],
+      ],
+      { anchors: [], blocked: none },
+    );
+    expect(out.length).toBeGreaterThan(0);
+    expect(out.every((v) => v.x1 === v.x2 || v.y1 === v.y2)).toBe(true);
+    const ends = out.flatMap((v) => [`${v.x1},${v.y1}`, `${v.x2},${v.y2}`]);
+    expect(ends).toContain("1,0");
+    expect(ends).toContain("4,3");
   });
 });
