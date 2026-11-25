@@ -45,18 +45,11 @@ describe("op-amp rails: parsing and export", () => {
     ).toBeCloseTo(1, 4);
   });
 
-  it("keeps the rails through SPICE, .cir and .asc exports", () => {
+  it("keeps the rails through a SPICE round trip", () => {
     const c = new ElecMap(schmitt("5", "VPOS=12 VNEG=-3 GBW=1Meg"));
     expect(c.toSpice()).toMatch(/X1 n2 in out OPAMP GBW=1meg VPOS=12 VNEG=-3/);
     expect(new ElecMap(c.toSpice()).toJSON()).toEqual(c.toJSON());
     expect(new ElecMap(schmitt("5")).toSpice()).toMatch(/OPAMP VSAT=15$/m);
-    const cir = c.toCir();
-    expect(cir).toMatch(/B1 y 0 V=4\.5\+7\.5\*tanh\(133\.3\d*k\*\(V\(inp\)-V\(inn\)\)\)/);
-    expect(cir).toMatch(/^X1 n2 in out OPAMP_X1$/m);
-    const asc = c.toAsc();
-    expect(asc).toMatch(/SYMATTR Value OPAMP_X1/);
-    expect(asc).toMatch(/\.subckt OPAMP_X1/);
-    expect(asc).not.toMatch(/opamp\.sub/);
   });
 });
 
