@@ -62,6 +62,42 @@ describe("transfer function between two voltages", () => {
     expect(three.dcGain()).toBeCloseTo(1, 4);
   });
 
+  it("picks the source by itself when sources in series all give the same ratio", () => {
+    // Two harmonics in series build ve; V3 feeds an unrelated branch and never reaches ve.
+    const net = [
+      "V1 ve m SIN(0 1 1k) AC 1",
+      "V2 m 0 SIN(0 0.33 3k) AC 1",
+      "V3 z 0 DC 5 AC 1",
+      "R1 ve out 1k",
+      "C1 out 0 1u",
+      "R2 z 0 1k",
+    ].join("\n");
+    const H = ElecMap.fromSpice(net).transferFunction({ input: { voltage: "ve" }, output: "out" });
+    expect(H.dcGain()).toBeCloseTo(1, 9);
+    expect(H.cutoffFrequency()).toBeCloseTo(1 / (2 * Math.PI * 1e-3), 3);
+  });
+
+  it("names the sources when the ratio depends on which one drives", () => {
+    const c = ElecMap.fromSpice("V1 a 0 AC 1\nV2 x 0 AC 1\nR1 a b 1k\nR2 b 0 1k\nR3 x b 3k");
+    expect(() => c.transferFunction({ input: { voltage: "b" }, output: "x" })).toThrow(
+      /depends on which source drives \(V1, V2\)/,
+    );
+  });
+
+  it("refuses a circuit without any source", () => {
+    const c = ElecMap.fromSpice("R1 a 0 1k\nR2 a b 1k\nR3 b 0 1k");
+    expect(() => c.transferFunction({ input: { voltage: "a" }, output: "b" })).toThrow(
+      /no independent source/,
+    );
+  });
+
+  it("refuses a voltage that no source reaches", () => {
+    const c = ElecMap.fromSpice("V1 a 0 DC 1\nV2 b 0 DC 1\nR1 a 0 1k\nR2 b 0 1k\nR3 z 0 1k");
+    expect(() => c.transferFunction({ input: { voltage: "z" }, output: "a" })).toThrow(
+      /does not depend on any source/,
+    );
+  });
+
   it("refuses a voltage the source does not reach", () => {
     const c = ElecMap.fromSpice("V1 a 0 AC 1\nR1 a out 1k\nR2 out 0 1k\nR3 z 0 1k\n");
     expect(() => c.transferFunction({ input: { voltage: "z" }, output: "out" })).toThrow(

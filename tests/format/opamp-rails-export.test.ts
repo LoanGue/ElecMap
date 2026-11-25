@@ -14,7 +14,10 @@ describe("op-amp rails: .cir and .asc exports", () => {
     const cir = schmitt("VPOS=12 VNEG=-3 GBW=1Meg").toCir();
     expect(cir).toMatch(/B1 y 0 V=4\.5\+7\.5\*tanh\(133\.3\d*k\*\(V\(inp\)-V\(inn\)\)\)/);
     expect(cir).toMatch(/^X1 n2 in out OPAMP_X1$/m);
-    expect(cir).toMatch(/^C1 x 0 /m);
+    // Pole at 2π·GBW/A with the ideal op-amp's A = 1e6: R = 1, C = A / (2π·GBW).
+    expect(cir).toMatch(/^R1 y x 1$/m);
+    expect(cir).toMatch(/^C1 x 0 159\.15\d*m$/m);
+    expect(cir).toMatch(/^E1 out 0 x 0 1$/m);
   });
 
   it("writes an ideal railed op-amp without a pole", () => {
