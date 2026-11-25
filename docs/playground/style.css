@@ -296,6 +296,9 @@ body.pg-resizing {
   touch-action: none;
   overscroll-behavior: contain;
 }
+.pg-schematic[hidden] {
+  display: none;
+}
 .pg-schematic svg {
   display: block;
   max-width: none;
