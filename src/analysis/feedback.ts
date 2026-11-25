@@ -48,7 +48,9 @@ export function feedbackWarnings(system: MnaSystem, options: TransferOptions): V
 function withFiniteOpamps(doc: CircuitJSON): CircuitJSON {
   const components = doc.components.map((c): ComponentJSON => {
     if (c.type !== "opamp") return c;
-    const { vpos: _vpos, vneg: _vneg, ...linear } = c;
+    const linear = { ...c };
+    delete linear.vpos;
+    delete linear.vneg;
     return c.gain === undefined ? { ...linear, ...CHECK_OPAMP } : linear;
   });
   return { ...doc, components };
