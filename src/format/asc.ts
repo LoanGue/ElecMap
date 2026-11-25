@@ -356,6 +356,7 @@ export function toAsc(
   const symbols: Placed[] = [];
   const texts: string[] = [];
   let usesOpamp = false;
+  const railed = new Set<string>();
   for (const e of p.elements) {
     const c = e.component;
     if (c.type === "coupling") {
@@ -380,7 +381,11 @@ export function toAsc(
     // LTspice names an op-amp after its prefix X (the ideal one is an E here).
     const inst = symbol === ASC_SYMBOLS.opamp ? e.name.replace(/^EX/, "X") : e.name;
     const attrs: [string, string][] = [["InstName", inst]];
-    if (symbol === ASC_SYMBOLS.opamp && c.type === "opamp") {
+    if (symbol === ASC_SYMBOLS.opamp && c.type === "opamp" && c.vpos !== undefined) {
+      // LTspice's opamp has no rails: keep the generated subcircuit.
+      railed.add(e.value);
+      attrs.push(["Value", e.value]);
+    } else if (symbol === ASC_SYMBOLS.opamp && c.type === "opamp") {
       usesOpamp = true;
       attrs.push(["Value", "opamp"]);
       attrs.push(["SpiceLine", `Aol=${formatSpice(c.gain ?? options.idealGain ?? 1e6)}`]);
@@ -450,7 +455,7 @@ export function toAsc(
   const analysis = options.analysis ?? ".op";
   const directives = [
     // The op-amps use LTspice's own model: drop their subcircuits.
-    ...withoutOpampSubckts(p.directives),
+    ...withoutOpampSubckts(p.directives, railed),
     ...(usesOpamp ? [".lib opamp.sub"] : []),
     ...texts.filter((t) => t.startsWith("!")).map((t) => t.slice(1)),
     ...(typeof analysis === "string" ? [analysis] : analysis),
@@ -472,11 +477,11 @@ export function toAsc(
 }
 
 /** Directives without the subcircuits of the op-amps. */
-function withoutOpampSubckts(directives: readonly string[]): string[] {
+function withoutOpampSubckts(directives: readonly string[], keep: ReadonlySet<string>): string[] {
   const out: string[] = [];
   let skip = false;
   for (const d of directives) {
-    if (d.startsWith(".subckt OPAMP_")) skip = true;
+    if (d.startsWith(".subckt OPAMP_")) skip = !keep.has(d.split(" ")[1] as string);
     if (!skip) out.push(d);
     if (d.startsWith(".ends")) skip = false;
   }

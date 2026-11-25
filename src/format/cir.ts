@@ -54,7 +54,7 @@ const LETTER: Record<ComponentJSON["type"], string> = {
 /** Name of the element written for `c` (the letter of the type it becomes). */
 function letterOf(c: ComponentJSON): string {
   if (c.type === "switch") return c.closed && !c.ron ? "V" : "R";
-  if (c.type === "opamp" && c.gbw === undefined) return "E";
+  if (c.type === "opamp" && c.gbw === undefined && c.vpos === undefined) return "E";
   return LETTER[c.type];
 }
 
@@ -92,7 +92,7 @@ function nodeCount(c: ComponentJSON): number {
     case "vccs":
       return 4;
     case "opamp":
-      return c.gbw === undefined ? 4 : 3;
+      return c.gbw === undefined && c.vpos === undefined ? 4 : 3;
     default:
       return c.nodes.length;
   }
@@ -158,19 +158,11 @@ export function portableCircuit(circuit: CircuitJSON, options: CirOptions = {}):
       case "opamp": {
         const [inp, inn, out] = n as [string, string, string];
         const gain = c.gain ?? options.idealGain ?? 1e6;
-        if (c.gbw === undefined) {
+        if (c.gbw === undefined && c.vpos === undefined) {
           lines.push(`${name} ${out} 0 ${inp} ${inn} ${formatSpice(gain)}`);
         } else {
           const sub = unique("model", `OPAMP_${clean(c.id)}`);
-          subckts.push(
-            `.subckt ${sub} inp inn out`,
-            `* gain ${formatSpice(gain)}, gain-bandwidth ${formatSpice(c.gbw)} Hz: one pole at GBW/gain`,
-            "G1 0 x inp inn 1",
-            `R1 x 0 ${formatSpice(gain)}`,
-            `C1 x 0 ${formatSpice(1 / (2 * Math.PI * c.gbw))}`,
-            "E1 out 0 x 0 1",
-            ".ends",
-          );
+          subckts.push(...opampSubckt(sub, c, gain));
           lines.push(`${name} ${inp} ${inn} ${out} ${sub}`);
         }
         break;
@@ -301,4 +293,39 @@ export function toCir(circuit: CircuitJSON, options: CirOptions = {}): string {
       ".end",
     ].join("\n") + "\n"
   );
+}
+
+/**
+ * Subcircuit of a finite op-amp: the gain stage (a transconductance into a
+ * resistor, or a `tanh` behavioural source between the rails), then the pole.
+ */
+function opampSubckt(
+  sub: string,
+  c: Extract<ComponentJSON, { type: "opamp" }>,
+  gain: number,
+): string[] {
+  const f = formatSpice;
+  const pole = c.gbw === undefined ? "" : `, gain-bandwidth ${f(c.gbw)} Hz: one pole at GBW/gain`;
+  if (c.vpos === undefined || c.vneg === undefined) {
+    const cap = `C1 x 0 ${f(1 / (2 * Math.PI * (c.gbw as number)))}`;
+    const stage = ["G1 0 x inp inn 1", `R1 x 0 ${f(gain)}`, cap];
+    return [
+      `.subckt ${sub} inp inn out`,
+      `* gain ${f(gain)}${pole}`,
+      ...stage,
+      "E1 out 0 x 0 1",
+      ".ends",
+    ];
+  }
+  const [mid, half] = [(c.vpos + c.vneg) / 2, (c.vpos - c.vneg) / 2];
+  const tau = c.gbw === undefined ? [] : [`C1 x 0 ${f(gain / (2 * Math.PI * c.gbw))}`];
+  return [
+    `.subckt ${sub} inp inn out`,
+    `* gain ${f(gain)}${pole}, output between ${f(c.vneg)} V and ${f(c.vpos)} V`,
+    `B1 y 0 V=${f(mid)}+${f(half)}*tanh(${f(gain / half)}*(V(inp)-V(inn)))`,
+    "R1 y x 1",
+    ...tau,
+    "E1 out 0 x 0 1",
+    ".ends",
+  ];
 }
