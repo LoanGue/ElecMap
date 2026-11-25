@@ -27,15 +27,27 @@ npm install
 | `npm run test:pack` | Pack the library and import it as ESM and CJS       |
 | `npm run check`     | Lint, format, types, tests, build                   |
 
-CI runs `check` on Node 22 and 24, plus `examples`, `docs` (warnings are errors) and `test:pack`.
+Tests run locally only; GitHub Actions never runs them (see [Pull request gate](#pull-request-gate)).
 
 ## Workflow
 
 1. Create a branch (`feat/...`, `fix/...`, `docs/...`, `chore/...`).
 2. Add tests for any behaviour change. Analytical reference values are preferred (e.g. `fc = 1/(2πRC)`).
-3. Run `npm run check`.
+3. Run the tests scoped to the diff: `npx vitest related --run <changed files>`. Run `npm run check` (plus `examples`, `docs` and `test:pack` when the public API or the packaging changes) for a major change.
 4. If the change affects the published package, add a changeset: `npx changeset`.
 5. Open a pull request against `main`.
+6. Fill the `## Tests` section of the pull request body with the commands run locally and their result.
+
+## Pull request gate
+
+The only check on pull requests is the light `pr-gate` workflow (`.github/workflows/pr-gate.yml`). It installs nothing and runs in seconds:
+
+- **Size cap**: the diff against the base branch stays at or under 400 lines, unless the pull request carries the `large-pr` label (generated or vendored code, mechanical migration, data or fixtures, with the reason in the body).
+- **Tests section**: the pull request body has a non-empty `## Tests` section, read through the API so that a body edited after a push is judged as it is now.
+
+A repository ruleset on `main` requires the `pr-gate` check before merging.
+
+Rollback, in this order: first disable or delete the ruleset (Settings > Rules > Rulesets), then remove or change the workflow. The reverse order leaves `main` waiting for a check that never reports, which blocks every merge.
 
 ## Project layout
 
