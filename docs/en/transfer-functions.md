@@ -38,6 +38,23 @@ filter.transferFunction({ input: "V1", output: ["a", "b"] }); // V(a) − V(b)
 filter.transferFunction({ input: "V1", output: { current: "R1" } }); // I(R1) / V1 (admittance)
 ```
 
+### Between two voltages of the circuit
+
+The input can also be a node voltage rather than a source: `H = V(out) / V(in)`. The circuit is still driven by its source; the path from the source to `in` cancels out.
+
+```ts
+const stage = new ElecMap("V1 s 0 AC 1
+R0 s in 470
+R1 in out 1k
+C1 out 0 100n");
+const H = stage.transferFunction({ input: { voltage: "in" }, output: "out" });
+H.toString(); // "V(out)/V(in): (1) / (1 + 0.0001·s)"
+H.cutoffFrequency(); // 1591.55
+stage.transferFunction({ input: { voltage: ["a", "b"], source: "V1" }, output: "out" }); // V(out) / (V(a) − V(b))
+```
+
+The voltage must depend on the source; otherwise the ratio is undefined and an `INVALID_ARGUMENT` error is thrown.
+
 ## Display it in LaTeX
 
 ```ts

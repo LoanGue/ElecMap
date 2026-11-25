@@ -13,6 +13,7 @@ export {
 export type {
   OutputSpec,
   TransferOptions,
+  VoltageInput,
   Sinusoid,
   PeriodicSignal,
   InputSignal,

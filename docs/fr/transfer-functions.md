@@ -38,6 +38,23 @@ filter.transferFunction({ input: "V1", output: ["a", "b"] }); // V(a) − V(b)
 filter.transferFunction({ input: "V1", output: { current: "R1" } }); // I(R1) / V1 (admittance)
 ```
 
+### Entre deux tensions du circuit
+
+L'entrée peut aussi être la tension d'un nœud plutôt qu'une source : `H = V(out) / V(in)`. Le circuit reste alimenté par sa source ; le chemin de la source jusqu'à `in` se simplifie.
+
+```ts
+const stage = new ElecMap("V1 s 0 AC 1
+R0 s in 470
+R1 in out 1k
+C1 out 0 100n");
+const H = stage.transferFunction({ input: { voltage: "in" }, output: "out" });
+H.toString(); // "V(out)/V(in): (1) / (1 + 0.0001·s)"
+H.cutoffFrequency(); // 1591.55
+stage.transferFunction({ input: { voltage: ["a", "b"], source: "V1" }, output: "out" }); // V(out) / (V(a) − V(b))
+```
+
+La tension doit dépendre de la source ; sinon le rapport n'est pas défini et une erreur `INVALID_ARGUMENT` est levée.
+
 ## L'afficher en LaTeX
 
 ```ts
