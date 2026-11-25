@@ -138,7 +138,7 @@ function initialScale(system: MnaSystem): number {
   return count === 0 ? 1 : Math.exp(logs / count);
 }
 
-export interface Interpolation {
+interface Interpolation {
   num: Polynomial;
   den: Polynomial;
   denRoots: Complex[];
@@ -228,7 +228,7 @@ function dft(samples: readonly Complex[], thetas: readonly number[]): number[] {
 }
 
 /** Removes pole/zero pairs that coincide (uncontrollable or unobservable modes). */
-export function cancelCommon(num: Polynomial, den: Polynomial): Interpolation {
+function cancelCommon(num: Polynomial, den: Polynomial): Interpolation {
   const denRoots = den.degree > 0 ? polynomialRoots(den) : [];
   if (num.degree < 1 || den.degree < 1) return { num, den, denRoots };
   const zeros = polynomialRoots(num);
@@ -254,7 +254,9 @@ export function cancelCommon(num: Polynomial, den: Polynomial): Interpolation {
 
 /** Transfer function `output / input` of a circuit (all other sources off). */
 export function transferFunction(system: MnaSystem, options: TransferOptions): TransferFunction {
-  if (typeof options.input === "object") return voltageRatio(system, options.output, options.input);
+  if (typeof options.input === "object" && options.input !== null) {
+    return voltageRatio(system, options.output, options.input);
+  }
   const input = resolveInput(system, options.input);
   const { form, label } = outputForm(system, options.output);
   const values = singleSource(input, 1);
