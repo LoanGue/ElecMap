@@ -317,6 +317,13 @@ export function validateCircuit(input: unknown, ground = "0"): ValidationIssue[]
         }
       }
     }
+    if (c.type === "opamp" && (c.vpos !== undefined || c.vneg !== undefined)) {
+      if (!(c.vpos !== undefined && c.vneg !== undefined && c.vpos > c.vneg)) {
+        error("INVALID_VALUE", `${c.id}: vpos and vneg go together, with vpos > vneg`, {
+          componentId: c.id,
+        });
+      }
+    }
     if (c.type === "coupling") {
       const [a, b] = c.inductors;
       for (const l of [a, b]) {

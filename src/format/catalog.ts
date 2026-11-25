@@ -99,7 +99,12 @@ export const COMPONENT_CATALOG: Readonly<Record<ComponentType, ComponentSpec>> =
     letter: "X",
     name: "Operational amplifier",
     ports: ["in+", "in-", "out"],
-    numbers: { gain: [false, "positive"], gbw: [false, "positive"] },
+    numbers: {
+      gain: [false, "positive"],
+      gbw: [false, "positive"],
+      vpos: [false, "any"],
+      vneg: [false, "any"],
+    },
   },
   coupling: {
     type: "coupling",
