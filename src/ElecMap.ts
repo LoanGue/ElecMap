@@ -18,6 +18,8 @@ import { acAnalysis, acSweep } from "./analysis/ac";
 import type { AcExcitation, AcSweep, AcSweepOptions } from "./analysis/ac";
 import type { AcSolution, DcSolution } from "./analysis/solution";
 import { transferFunction } from "./analysis/transfer";
+import { feedbackWarnings } from "./analysis/feedback";
+import type { ValidationIssue } from "./format/validate";
 import { transient } from "./analysis/transient";
 import { layoutCircuit } from "./render/layout";
 import type { LayoutOptions } from "./render/layout";
@@ -527,6 +529,30 @@ V1 in 0 …"
         ? (spec as TransferOptions)
         : { output: spec as OutputSpec };
     return transferFunction(this.smallSignal, options);
+  }
+
+  /**
+   * Warnings on {@link ElecMap.transferFunction}: `POSITIVE_FEEDBACK` when an
+   * ideal op-amp sits in positive feedback, so that the linear result has no
+   * physical meaning (checked with each ideal op-amp as `GAIN=1e5 GBW=1e6`).
+   *
+   * @example
+   * ```ts
+   * const schmitt = new ElecMap("V1 n1 0 1
+R3 in n1 1k
+X1 n2 in out OPAMP
+R2 n2 out 1k
+R1 n2 0 1k");
+   * schmitt.transferFunction("out").dcGain(); // 2 (looks stable)
+   * schmitt.transferWarnings("out").map((w) => w.code); // ["POSITIVE_FEEDBACK"]
+   * ```
+   */
+  transferWarnings(spec: OutputSpec | TransferOptions): ValidationIssue[] {
+    const options: TransferOptions =
+      typeof spec === "object" && !Array.isArray(spec) && "output" in spec
+        ? (spec as TransferOptions)
+        : { output: spec as OutputSpec };
+    return feedbackWarnings(this.system, options);
   }
 
   /**
