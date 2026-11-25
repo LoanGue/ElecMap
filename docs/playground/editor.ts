@@ -13,6 +13,7 @@ import type {
   SchematicLayout,
 } from "../../src";
 import type { Strings } from "./i18n";
+import { reroute, simplify, type Move } from "./routing";
 
 // ------------------------------------------------------------------ model
 
@@ -527,6 +528,72 @@ export function icon(kind: Kind, style: "iec" | "ansi"): string {
   return renderSvg(layout, { theme: "none", style, showIds: false, showValues: false, scale: 7 });
 }
 
+// ---------------------------------------------------------------- routing
+
+/** Points the wiring keeps: pins, grounds and labels (except `skip`). */
+function anchorsOf(d: Drawing, skip?: object): Pt[] {
+  return [
+    ...d.parts.filter((p) => p !== skip).flatMap(pinsOf),
+    ...d.grounds.filter((g) => g !== skip),
+    ...d.labels.filter((l) => l !== skip),
+  ];
+}
+
+/** Grid points under the part bodies, where wires should not run. */
+function bodies(parts: Part[]): Set<string> {
+  const out = new Set<string>();
+  const box = (x1: number, x2: number, y1: number, y2: number) => {
+    for (let x = x1; x <= x2; x++) for (let y = y1; y <= y2; y++) out.add(key(x, y));
+  };
+  for (const p of parts) {
+    if (TWO_TERMINAL.has(p.kind)) {
+      const [dx, dy] = DIRS[p.dir];
+      for (let i = 1; i < 4; i++) out.add(key(p.x + i * dx, p.y + i * dy));
+    } else if (p.kind === "opamp") box(p.x - 4, p.x - 1, p.y - 2, p.y + 2);
+    else box(p.x - 2, p.x, p.y + 1, p.y + 5);
+  }
+  return out;
+}
+
+/** Moves one wire; the wire ends on its ends follow, with a bend when they would go diagonal. */
+function movedWire(d: Drawing, index: number, dx: number, dy: number): Drawing {
+  const w = d.wires[index];
+  if (!w || (dx === 0 && dy === 0)) return d;
+  const points = [
+    { x: w.x1, y: w.y1 },
+    { x: w.x2, y: w.y2 },
+  ];
+  w.x1 += dx;
+  w.x2 += dx;
+  w.y1 += dy;
+  w.y2 += dy;
+  const hit = (x: number, y: number) => points.some((q) => q.x === x && q.y === y);
+  const out: Wire[] = [];
+  d.wires.forEach((v, i) => {
+    const h1 = i !== index && hit(v.x1, v.y1);
+    const h2 = i !== index && hit(v.x2, v.y2);
+    if (!h1 && !h2) {
+      out.push(v);
+      return;
+    }
+    const a = { x: v.x1 + (h1 ? dx : 0), y: v.y1 + (h1 ? dy : 0) };
+    const b = { x: v.x2 + (h2 ? dx : 0), y: v.y2 + (h2 ? dy : 0) };
+    if (a.x === b.x || a.y === b.y) out.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y });
+    else {
+      // Keep the fixed end's direction, bend near the moved end.
+      const fixed = h1 ? b : a;
+      const moving = h1 ? a : b;
+      const c = v.x1 === v.x2 ? { x: fixed.x, y: moving.y } : { x: moving.x, y: fixed.y };
+      out.push(
+        { x1: fixed.x, y1: fixed.y, x2: c.x, y2: c.y },
+        { x1: c.x, y1: c.y, x2: moving.x, y2: moving.y },
+      );
+    }
+  });
+  d.wires = simplify(out, anchorsOf(d));
+  return d;
+}
+
 // ----------------------------------------------------------------- editor
 
 export interface EditorHost {
@@ -815,66 +882,27 @@ export class Editor {
   }
 
   /**
-   * Moves the selection by `(dx, dy)` from the drawing `from`; wire ends on the
-   * moved pins follow, with a bend when they would go diagonal.
+   * Moves the selection by `(dx, dy)` from the drawing `from`. Wires on moved
+   * pins, grounds or labels are routed again with the fewest bends; a moved
+   * wire drags the ends of its neighbours.
    */
   private moved(from: Drawing, sel: Selection, dx: number, dy: number): Drawing {
     const d = JSON.parse(JSON.stringify(from)) as Drawing;
-    let points: Pt[] = [];
-    if (sel.kind === "part") {
-      const p = d.parts.find((q) => q.id === sel.id);
-      if (!p) return d;
-      points = pinsOf(p);
-      p.x += dx;
-      p.y += dy;
-    } else if (sel.kind === "ground" || sel.kind === "label") {
-      const g = sel.kind === "ground" ? d.grounds[sel.index] : d.labels[sel.index];
-      if (!g) return d;
-      points = [{ ...g }];
-      g.x += dx;
-      g.y += dy;
-    } else {
-      const w = d.wires[sel.index];
-      if (!w) return d;
-      points = [
-        { x: w.x1, y: w.y1 },
-        { x: w.x2, y: w.y2 },
-      ];
-      w.x1 += dx;
-      w.x2 += dx;
-      w.y1 += dy;
-      w.y2 += dy;
-    }
-    if (dx === 0 && dy === 0) return d;
-    const hit = (x: number, y: number) => points.some((q) => q.x === x && q.y === y);
-    const out: Wire[] = [];
-    d.wires.forEach((w, i) => {
-      if (sel.kind === "wire" && i === sel.index) {
-        out.push(w);
-        return;
-      }
-      const h1 = hit(w.x1, w.y1);
-      const h2 = hit(w.x2, w.y2);
-      if (!h1 && !h2) {
-        out.push(w);
-        return;
-      }
-      const vertical = w.x1 === w.x2;
-      const a = { x: w.x1 + (h1 ? dx : 0), y: w.y1 + (h1 ? dy : 0) };
-      const b = { x: w.x2 + (h2 ? dx : 0), y: w.y2 + (h2 ? dy : 0) };
-      if (a.x === b.x || a.y === b.y) out.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y });
-      else {
-        // Keep the fixed end's direction, bend near the moved end.
-        const fixed = h1 ? b : a;
-        const moving = h1 ? a : b;
-        const c = vertical ? { x: fixed.x, y: moving.y } : { x: moving.x, y: fixed.y };
-        out.push(
-          { x1: fixed.x, y1: fixed.y, x2: c.x, y2: c.y },
-          { x1: c.x, y1: c.y, x2: moving.x, y2: moving.y },
-        );
-      }
-    });
-    d.wires = out.filter((w) => w.x1 !== w.x2 || w.y1 !== w.y2);
+    if (sel.kind === "wire") return movedWire(d, sel.index, dx, dy);
+    const part = sel.kind === "part" ? d.parts.find((q) => q.id === sel.id) : undefined;
+    const item =
+      sel.kind === "part"
+        ? part
+        : sel.kind === "ground"
+          ? d.grounds[sel.index]
+          : d.labels[sel.index];
+    if (!item || (dx === 0 && dy === 0)) return d;
+    const anchors = anchorsOf(d, item);
+    const old = part ? pinsOf(part) : [{ x: item.x, y: item.y }];
+    item.x += dx;
+    item.y += dy;
+    const moves = old.map((q) => [q, { x: q.x + dx, y: q.y + dy }] as Move);
+    d.wires = reroute(d.wires, moves, { anchors, blocked: bodies(d.parts) });
     return d;
   }
 
@@ -1168,6 +1196,8 @@ export class Editor {
       if (drag.moved) {
         this.undoStack.push(JSON.stringify(drag.from));
         this.redoStack = [];
+        // The moved wire may have merged with its neighbours.
+        if (drag.sel.kind === "wire") this.selection = undefined;
         this.update();
       } else {
         // A click: probe like on the schematic.
