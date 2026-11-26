@@ -1,10 +1,23 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const read = (name: string) =>
-  readFileSync(new URL(`../../docs/playground/${name}`, import.meta.url), "utf8");
-const css = read("style.css").replace(/\/\*[\s\S]*?\*\//g, "");
-const main = read("main.ts");
+const root = fileURLToPath(new URL("../../docs/playground/", import.meta.url));
+const css = readFileSync(join(root, "style.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+
+/** Every `.ts` file under `dir`, subfolders included, so code moved out of main.ts stays scanned. */
+function modules(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory()
+      ? modules(join(dir, e.name))
+      : e.name.endsWith(".ts")
+        ? [join(dir, e.name)]
+        : [],
+  );
+}
+const files = modules(root);
+const source = files.map((f) => readFileSync(f, "utf8")).join("\n");
 
 /** Rules outside any @media block, as [selector, declarations]. */
 function topLevelRules(text: string): [string, string][] {
@@ -31,10 +44,10 @@ function topLevelRules(text: string): [string, string][] {
 /** Selectors (#id and .class) of every element the playground toggles with `hidden`. */
 function toggled(): string[] {
   const out = new Set<string>();
-  for (const [, target] of main.matchAll(/\$\("([#.][\w-]+)"\)\.hidden\s*=/g)) {
+  for (const [, target] of source.matchAll(/\$\("([#.][\w-]+)"\)\.hidden\s*=/g)) {
     out.add(target as string);
     const id = (target as string).slice(1);
-    const tag = main.match(new RegExp(`id="${id}"[^>]*class="([^"]+)"`));
+    const tag = source.match(new RegExp(`id="${id}"[^>]*class="([^"]+)"`));
     for (const c of tag?.[1]?.split(/\s+/) ?? []) out.add(`.${c}`);
   }
   return [...out];
@@ -44,6 +57,11 @@ describe("playground style sheet", () => {
   const rules = topLevelRules(css);
   const shows = (decls: string) => /display:\s*(?!none)[\w-]+/.test(decls);
   const hides = (decls: string) => /display:\s*none/.test(decls);
+
+  it("scans every playground module", () => {
+    expect(files.some((f) => f.endsWith("main.ts"))).toBe(true);
+    expect(files.length).toBeGreaterThan(1);
+  });
 
   it("hides every toggled element whose own rule sets a display", () => {
     const missing = toggled().filter((sel) => {
