@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createGestures, type PointerInput } from "../../../docs/playground/canvas/gestures";
+import {
+  createGestures,
+  wheelFactor,
+  type PointerInput,
+} from "../../../docs/playground/canvas/gestures";
 import { createPinch, MIN_SPAN, routeTouch } from "../../../docs/playground/canvas/pinch";
 
 const touch =
@@ -141,6 +145,17 @@ describe("routeTouch", () => {
       "press",
       "click",
     ]);
+  });
+
+  it("lets a Ctrl+wheel zoom and a mouse hover through an engaged pinch", () => {
+    const pinch = createPinch();
+    const feed = routeTouch(createGestures(), pinch);
+    [down(1, 0, 0), down(2, 50, 0)].forEach(feed);
+    expect(pinch.engaged()).toBe(true);
+    expect(feed({ type: "wheel", x: 5, y: 6, deltaY: -100, ctrlKey: true })).toEqual([
+      { kind: "zoom", at: { x: 5, y: 6 }, factor: wheelFactor(-100) },
+    ]);
+    expect(feed({ type: "move", x: 1, y: 2 })).toEqual([{ kind: "hover", at: { x: 1, y: 2 } }]);
   });
 
   it("passes the mouse and the wheel straight to the gestures", () => {
