@@ -7,7 +7,7 @@
  */
 
 export interface HistoryOptions<S> {
-  /** Most undo steps kept; the oldest go first. Default 200. */
+  /** Most undo steps kept; the oldest go first. Default 200; values below 1 count as 1. */
   cap?: number;
   /** Copy taken of every snapshot, so later edits in place do not reach it. Default `structuredClone`. */
   copy?: (state: S) => S;
@@ -20,9 +20,16 @@ export interface History<S> {
   begin(before: S): void;
   /** Closes the gesture; `changed: false` (a click that moved nothing) records nothing. */
   commit(changed?: boolean): void;
-  /** Steps back: the state to restore, or undefined when there is nothing to undo. */
+  /**
+   * Steps back: the state to restore, or undefined when there is nothing to
+   * undo. Drops an open gesture. The returned snapshot is no longer held by
+   * the history: the caller owns it and may edit it in place.
+   */
   undo(current: S): S | undefined;
-  /** Steps forward again after an undo, or undefined when there is nothing to redo. */
+  /**
+   * Steps forward again after an undo, or undefined when there is nothing to
+   * redo. Drops an open gesture. The caller owns the returned snapshot.
+   */
   redo(current: S): S | undefined;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
