@@ -2,4 +2,4 @@
 "elecmap": patch
 ---
 
-Playground: part display names are free and may repeat (`R_load` on two parts), shown by default as the id with a subscript (`C₁`); the netlist and the exports keep the unique SPICE ids.
+Playground (internal): pure naming helpers for upcoming part display names (`subscript`, `displayName`, `rename`, `nextId`), not yet used by the editor; loaded drawings drop blank part names.
