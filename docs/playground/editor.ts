@@ -3,7 +3,7 @@
  * hand; the drawing is turned into a SPICE netlist. It is drawn with the
  * engine's own renderer (`renderSvg`), so it looks like the schematics.
  */
-import { renderSvg, valueText } from "../../src";
+import { renderSvg } from "../../src";
 import type {
   ComponentJSON,
   ElecMap,
@@ -30,8 +30,9 @@ import type { Drawing, Kind, NetLabel, Part, Pt, Wire } from "./model";
 import { connect, toNetlist } from "./netlist";
 import type { Connectivity } from "./netlist";
 import { fromCircuit } from "./circuit-import";
+import { icon, placed } from "./symbols";
 
-export { connect, emptyDrawing, fromCircuit, PALETTE, pinsOf, rotatable, toNetlist };
+export { connect, emptyDrawing, fromCircuit, icon, PALETTE, pinsOf, rotatable, toNetlist };
 export type { Connectivity, Drawing, Kind, NetLabel, Part, Wire };
 
 const key = (x: number, y: number): string => `${x},${y}`;
@@ -41,86 +42,6 @@ const key = (x: number, y: number): string => `${x},${y}`;
 const U = 20;
 /** Grid point → pixel (the renderer pads by one cell, bounds start at 0). */
 const px = (v: number) => v * U + U;
-
-function typeOf(kind: Kind): ComponentJSON["type"] {
-  if (kind === "npn" || kind === "pnp") return "bjt";
-  if (kind === "nmos" || kind === "pmos") return "mosfet";
-  return kind;
-}
-
-/** Stand-in component JSON while the netlist does not compile. */
-function stub(p: Part, nodes: string[]): ComponentJSON {
-  const c: Record<string, unknown> = { id: p.id, type: typeOf(p.kind), nodes, value: 0 };
-  if (p.kind === "npn" || p.kind === "pnp" || p.kind === "nmos" || p.kind === "pmos")
-    c["polarity"] = p.kind;
-  if (p.kind === "vsource" || p.kind === "isource") c["dc"] = 1;
-  if (p.kind === "switch") c["closed"] = !/off/i.test(p.value);
-  if (p.kind === "bsource") {
-    c["kind"] = /^\s*i/i.test(p.value) ? "current" : "voltage";
-    c["expression"] = "";
-  }
-  if (p.kind === "nmos" || p.kind === "pmos") (c["nodes"] as string[]).push(nodes[2] as string);
-  return c as unknown as ComponentJSON;
-}
-
-function placed(p: Part, nodes: string[], info: ComponentJSON | undefined): PlacedComponent {
-  const pins = pinsOf(p);
-  const comp = info ?? stub(p, [...nodes]);
-  let value: string;
-  try {
-    value = info ? valueText(info) : p.value;
-  } catch {
-    value = p.value;
-  }
-  let labelAt: PlacedComponent["labelAt"];
-  if (TWO_TERMINAL.has(p.kind)) {
-    const [a, b] = pins as [Pt, Pt];
-    const cx = (a.x + b.x) / 2;
-    const cy = (a.y + b.y) / 2;
-    labelAt =
-      a.y === b.y ? { x: cx, y: cy, align: "middle" } : { x: cx + 1.6, y: cy, align: "start" };
-  } else if (p.kind === "opamp") labelAt = { x: p.x - 2.2, y: p.y + 2.6, align: "start" };
-  else
-    labelAt = {
-      x: p.x + (p.kind === "npn" || p.kind === "pnp" ? 1.9 : 1.4),
-      y: p.y + 3,
-      align: "start",
-    };
-  return {
-    id: p.id,
-    type: typeOf(p.kind),
-    component: comp,
-    orientation: TWO_TERMINAL.has(p.kind) ? p.dir : p.kind === "opamp" ? "right" : "down",
-    pins: pins.map((q, i) => ({ ...q, node: nodes[i] ?? "", ground: false })),
-    label: { id: p.id, value },
-    labelAt,
-  };
-}
-
-/** Small SVG of a part, for the palette. */
-export function icon(kind: Kind, style: "iec" | "ansi"): string {
-  const p: Part = { id: "", kind, x: 0, y: 0, dir: "right", value: DEFAULT_VALUE[kind] ?? "" };
-  const pins = pinsOf(p);
-  const xs = pins.map((q) => q.x);
-  const ys = pins.map((q) => q.y);
-  const pad = kind === "opamp" ? 0.6 : 0.4;
-  const bounds = {
-    minX: Math.min(...xs),
-    maxX:
-      Math.max(...xs) +
-      (kind === "npn" || kind === "pnp" || kind === "nmos" || kind === "pmos" ? 1 : 0),
-    minY: Math.min(...ys) - (TWO_TERMINAL.has(kind) ? 1 + pad : pad + 1),
-    maxY: Math.max(...ys) + (TWO_TERMINAL.has(kind) ? 1 + pad : pad + 1),
-  };
-  const layout: SchematicLayout = {
-    components: [placed(p, ["a", "b", "c"], undefined)],
-    nets: [],
-    grounds: [],
-    couplings: [],
-    bounds,
-  };
-  return renderSvg(layout, { theme: "none", style, showIds: false, showValues: false, scale: 7 });
-}
 
 // ----------------------------------------------------------------- editor
 
