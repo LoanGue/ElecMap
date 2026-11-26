@@ -89,6 +89,51 @@ describe("undo history", () => {
     expect(undoAll(h, -1)).toHaveLength(200);
   });
 
+  it("drops an open gesture on undo, so its commit records nothing", () => {
+    const h = createHistory<number>();
+    h.push(0);
+    h.begin(1);
+    h.push(1);
+    expect(h.undo(2)).toBe(0);
+    h.commit();
+    expect(h.canUndo).toBe(false);
+    expect(h.redo(0)).toBe(2);
+  });
+
+  it("drops an open gesture on redo, so its commit records nothing", () => {
+    const h = createHistory<number>();
+    h.push(0);
+    expect(h.undo(1)).toBe(0);
+    h.begin(0);
+    expect(h.redo(0)).toBe(1);
+    h.commit();
+    expect(h.undo(1)).toBe(0);
+    expect(h.canUndo).toBe(false);
+  });
+
+  it("stores snapshots through the copy option", () => {
+    const copied: number[] = [];
+    const h = createHistory<number>({
+      copy: (n) => {
+        copied.push(n);
+        return n * 10;
+      },
+    });
+    h.push(1);
+    expect(h.undo(5)).toBe(10);
+    expect(h.redo(10)).toBe(50);
+    expect(copied).toEqual([1, 5, 10]);
+  });
+
+  it("keeps at least one step when the cap is below 1", () => {
+    for (const cap of [0, -5]) {
+      const h = createHistory<number>({ cap });
+      h.push(0);
+      h.push(1);
+      expect(undoAll(h, 2)).toEqual([1]);
+    }
+  });
+
   it("forgets every step on clear", () => {
     const h = createHistory<number>();
     h.push(0);
