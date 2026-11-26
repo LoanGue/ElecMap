@@ -3,13 +3,14 @@ import {
   centerOffset,
   distance,
   emptyDrawing,
+  normalizeDrawing,
   onSegment,
   PALETTE,
   PREFIX,
   pinsOf,
   rotatable,
 } from "../../docs/playground/model";
-import type { Part } from "../../docs/playground/model";
+import type { Drawing, Part, Selection } from "../../docs/playground/model";
 
 const part = (kind: Part["kind"], dir: Part["dir"] = "right"): Part => ({
   id: "X1",
@@ -27,6 +28,7 @@ describe("playground drawing model", () => {
       wires: [],
       grounds: [],
       labels: [],
+      nodes: [],
       directives: "",
     });
   });
@@ -86,5 +88,49 @@ describe("playground drawing model", () => {
     expect(onSegment({ x: 5, y: 0 }, w)).toBe(false);
     expect(distance({ x: 2, y: 3 }, w)).toBe(3);
     expect(distance({ x: 7, y: 4 }, w)).toBe(5);
+  });
+
+  it("upgrades an old drawing without user nodes or names", () => {
+    // Shape of a share link or saved drawing written before `nodes` and `name`.
+    const old = JSON.parse(
+      '{"parts":[{"id":"R1","kind":"resistor","x":2,"y":2,"dir":"right","value":"1k"}],' +
+        '"wires":[{"x1":6,"y1":2,"x2":8,"y2":2}],"grounds":[{"x":8,"y":2}],"labels":[],"directives":".param a=1"}',
+    ) as unknown;
+    const d = normalizeDrawing(old);
+    expect(d.nodes).toEqual([]);
+    expect(d.parts).toEqual([
+      { id: "R1", kind: "resistor", x: 2, y: 2, dir: "right", value: "1k" },
+    ]);
+    expect(d.directives).toBe(".param a=1");
+    expect(normalizeDrawing(null)).toEqual(emptyDrawing());
+    expect(normalizeDrawing({ wires: "bad" }).wires).toEqual([]);
+  });
+
+  it("keeps names and user nodes through a JSON round trip", () => {
+    const d: Drawing = {
+      ...emptyDrawing(),
+      parts: [{ ...part("resistor"), id: "R1", name: "R_load" }, part("capacitor")],
+      nodes: [{ x: 4, y: 6 }],
+    };
+    expect(normalizeDrawing(JSON.parse(JSON.stringify(d)))).toEqual(d);
+  });
+
+  it("drops empty or non-string names instead of storing undefined", () => {
+    const raw = {
+      parts: [
+        { ...part("resistor"), name: "" },
+        { ...part("diode"), name: 3 },
+      ],
+    };
+    for (const p of normalizeDrawing(raw).parts) expect(Object.keys(p)).not.toContain("name");
+    // @ts-expect-error exactOptionalPropertyTypes: an absent name is not `undefined`.
+    const bad: Part = { ...part("resistor"), name: undefined };
+    expect(bad.name).toBeUndefined();
+  });
+
+  it("selects a wire by a point on it, not by its index", () => {
+    const sel: Selection = { kind: "wire", at: { x: 2, y: 0 } };
+    const w = { x1: 0, y1: 0, x2: 4, y2: 0 };
+    expect(sel.kind === "wire" && onSegment(sel.at, w)).toBe(true);
   });
 });
