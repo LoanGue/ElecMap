@@ -43,6 +43,7 @@ describe("playground netlist and circuit import", () => {
     ],
     grounds: [{ x: 5, y: 8 }],
     labels: [{ x: 8, y: 2, name: "out" }],
+    nodes: [],
     directives: "",
   };
 
@@ -83,6 +84,7 @@ describe("playground netlist and circuit import", () => {
         { x: 0, y: 0, name: "a" },
         { x: 2, y: 5, name: "a" },
       ],
+      nodes: [],
       directives: "",
     });
     expect(t.wireNode).toEqual(["a", "a"]);

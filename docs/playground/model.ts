@@ -25,7 +25,10 @@ export type Kind =
   | "bsource";
 
 export interface Part {
+  /** SPICE id, used in the netlist and the exports (`R1`). */
   id: string;
+  /** Display name shown on the drawing (`R_load`); the id when absent. */
+  name?: string;
   kind: Kind;
   /** Anchor: first pin (two-terminal), output (op-amp), top pin (transistor). */
   x: number;
@@ -46,6 +49,8 @@ export interface Drawing {
   wires: Wire[];
   grounds: Pt[];
   labels: NetLabel[];
+  /** Junctions the user placed: anchors kept by simplify and re-routing. */
+  nodes: Pt[];
   /** Extra netlist lines: `.model`, `.param`, `K…`. */
   directives: string;
 }
@@ -55,8 +60,38 @@ export const emptyDrawing = (): Drawing => ({
   wires: [],
   grounds: [],
   labels: [],
+  nodes: [],
   directives: "",
 });
+
+/** What the editor has selected. A wire is picked by a point on it, since
+ * re-routing and simplify renumber the wire array. */
+export type Selection =
+  | { kind: "part"; id: string }
+  | { kind: "wire"; at: Pt }
+  | { kind: "ground"; index: number }
+  | { kind: "label"; index: number };
+
+const list = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+
+/**
+ * Current drawing from a stored or shared one, possibly older: missing lists
+ * become empty, and a part name that is not a non-empty string is dropped.
+ */
+export function normalizeDrawing(raw: unknown): Drawing {
+  const d = (typeof raw === "object" && raw !== null ? raw : {}) as Partial<Drawing>;
+  const parts = list<Part>(d.parts).map(({ name, ...p }) =>
+    typeof name === "string" && name !== "" ? { ...p, name } : p,
+  );
+  return {
+    parts,
+    wires: list(d.wires),
+    grounds: list(d.grounds),
+    labels: list(d.labels),
+    nodes: list(d.nodes),
+    directives: typeof d.directives === "string" ? d.directives : "",
+  };
+}
 
 export const PREFIX: Record<Kind, string> = {
   resistor: "R",
