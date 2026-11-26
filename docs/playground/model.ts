@@ -27,7 +27,8 @@ export type Kind =
 export interface Part {
   /** SPICE id, used in the netlist and the exports (`R1`). */
   id: string;
-  /** Display name shown on the drawing (`R_load`); the id when absent. */
+  /** Display name shown on the drawing (`R_load`), trimmed and never blank. When absent
+   * the part shows its id with a subscript (`R₁`). */
   name?: string;
   kind: Kind;
   /** Anchor: first pin (two-terminal), output (op-amp), top pin (transistor). */
@@ -75,14 +76,24 @@ export type Selection =
 const list = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 
 /**
+ * Display name to store for user text: trimmed, or `undefined` when blank or
+ * not a string (the part then shows its default name).
+ */
+export function cleanName(text: unknown): string | undefined {
+  const name = typeof text === "string" ? text.trim() : "";
+  return name === "" ? undefined : name;
+}
+
+/**
  * Current drawing from a stored or shared one, possibly older: missing lists
- * become empty, and a part name that is not a non-empty string is dropped.
+ * become empty, and part names go through `cleanName` (blank ones dropped).
  */
 export function normalizeDrawing(raw: unknown): Drawing {
   const d = (typeof raw === "object" && raw !== null ? raw : {}) as Partial<Drawing>;
-  const parts = list<Part>(d.parts).map(({ name, ...p }) =>
-    typeof name === "string" && name !== "" ? { ...p, name } : p,
-  );
+  const parts = list<Part>(d.parts).map(({ name: raw, ...p }) => {
+    const name = cleanName(raw);
+    return name === undefined ? p : { ...p, name };
+  });
   return {
     parts,
     wires: list(d.wires),

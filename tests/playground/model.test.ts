@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   centerOffset,
+  cleanName,
   distance,
   emptyDrawing,
   normalizeDrawing,
@@ -126,6 +127,20 @@ describe("playground drawing model", () => {
     // @ts-expect-error exactOptionalPropertyTypes: an absent name is not `undefined`.
     const bad: Part = { ...part("resistor"), name: undefined };
     expect(bad.name).toBeUndefined();
+  });
+
+  it("trims names and drops blank ones, like a rename", () => {
+    const raw = {
+      parts: [
+        { ...part("resistor"), name: "  " },
+        { ...part("capacitor"), name: " R_load " },
+      ],
+    };
+    const [blank, padded] = normalizeDrawing(raw).parts;
+    expect(Object.keys(blank ?? {})).not.toContain("name");
+    expect(padded?.name).toBe("R_load");
+    expect(cleanName("\t")).toBeUndefined();
+    expect(cleanName(" Cin ")).toBe("Cin");
   });
 
   it("selects a wire by a point on it, not by its index", () => {
