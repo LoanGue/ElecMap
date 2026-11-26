@@ -3,6 +3,7 @@
  * display name (`R_load`) shown on the drawing, which may repeat. Pure
  * functions of the drawing.
  */
+import { cleanName } from "../model";
 import type { Drawing, Part } from "../model";
 
 const SUBSCRIPT = "₀₁₂₃₄₅₆₇₈₉";
@@ -23,15 +24,16 @@ export function subscript(id: string): string {
 export const displayName = (part: Part): string => part.name ?? subscript(part.id);
 
 /**
- * Drawing where part `id` shows `text`. Empty or blank text brings back the
- * default name. The SPICE id never changes, and the same display name may be
- * given to several parts. An unknown id leaves the drawing unchanged.
+ * Drawing where part `id` shows `text`, cleaned by `cleanName`: blank text
+ * brings back the default name. The SPICE id never changes, and the same
+ * display name may be given to several parts. An unknown id leaves the
+ * drawing unchanged.
  */
 export function rename(drawing: Drawing, id: string, text: string): Drawing {
-  const name = text.trim();
+  const name = cleanName(text);
   const parts = drawing.parts.map((p) => {
     if (p.id !== id) return p;
-    if (name !== "") return { ...p, name };
+    if (name !== undefined) return { ...p, name };
     const rest = { ...p };
     delete rest.name;
     return rest;
