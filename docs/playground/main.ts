@@ -2,7 +2,7 @@
  * ElecMap playground: a netlist editor wired to the engine, published with the
  * documentation (`docs/api/playground/`). Everything runs in the browser.
  */
-import { ElecMap, ElecMapError, formatSI } from "../../src";
+import { ElecMap } from "../../src";
 import type {
   Complex,
   ComponentJSON,
@@ -17,6 +17,17 @@ import type { Panel, Series } from "../site/plot";
 import { Editor, emptyDrawing, fromCircuit } from "./editor";
 import type { Drawing } from "./editor";
 import { EXAMPLES } from "./examples";
+import {
+  attempt,
+  complexText,
+  esc,
+  message,
+  option,
+  parseNumber,
+  si,
+  spice,
+  texName,
+} from "./format";
 import type { Tab } from "./examples";
 import { STRINGS } from "./i18n";
 import { Viewport } from "./viewport";
@@ -118,81 +129,8 @@ const $ = <T extends HTMLElement = HTMLElement>(sel: string): T => {
   return el;
 };
 
-function esc(text: string): string {
-  return text.replace(
-    /[&<>"']/g,
-    (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch] ?? ch,
-  );
-}
-
-/** SPICE-style number for the input boxes: 0.002 → "2m". */
-function spice(v: number): string {
-  const table: [number, string][] = [
-    [1e9, "g"],
-    [1e6, "meg"],
-    [1e3, "k"],
-    [1, ""],
-    [1e-3, "m"],
-    [1e-6, "u"],
-    [1e-9, "n"],
-    [1e-12, "p"],
-  ];
-  const a = Math.abs(v);
-  for (const [scale, suffix] of table) {
-    if (a >= scale * 0.9995) return `${Number((v / scale).toPrecision(4))}${suffix}`;
-  }
-  return `${v}`;
-}
-
-/** Parses "2m", "1.5k", "10meg", "3e-6" (empty or invalid → undefined). */
-function parseNumber(text: string): number | undefined {
-  const m = /^\s*([-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)\s*(meg|[fpnumkgt]|µ)?/i.exec(text);
-  if (!m) return undefined;
-  const scale: Record<string, number> = {
-    f: 1e-15,
-    p: 1e-12,
-    n: 1e-9,
-    u: 1e-6,
-    µ: 1e-6,
-    m: 1e-3,
-    k: 1e3,
-    meg: 1e6,
-    g: 1e9,
-    t: 1e12,
-  };
-  const v = Number(m[1]) * (m[2] ? (scale[m[2].toLowerCase()] ?? 1) : 1);
-  return Number.isFinite(v) ? v : undefined;
-}
-
-const si = (v: number, unit: string, digits = 4): string =>
-  Number.isFinite(v) ? formatSI(v, unit, digits) : v > 0 ? "∞" : v < 0 ? "−∞" : "—";
-
-function complexText(z: Complex, unit = ""): string {
-  if (Math.abs(z.im) < 1e-12 * Math.max(1, Math.abs(z.re))) return si(z.re, unit);
-  const sign = z.im < 0 ? "−" : "+";
-  return `${si(z.re, "")} ${sign} j${si(Math.abs(z.im), "")}${unit ? ` ${unit}` : ""}`;
-}
-
-function message(err: unknown): string {
-  if (err instanceof ElecMapError) {
-    const issues = err.details?.["issues"];
-    if (Array.isArray(issues) && issues.length > 0) {
-      return issues
-        .map((i: { message?: string }) => i.message ?? "")
-        .filter(Boolean)
-        .join("\n");
-    }
-    return err.message;
-  }
-  return err instanceof Error ? err.message : String(err);
-}
-
 const errorBox = (err: unknown): string =>
   `<div class="pg-error"><strong>${t.error}</strong><pre>${esc(message(err))}</pre></div>`;
-
-function option(value: string, label: string, current: string): string {
-  return `<option value="${esc(value)}"${value === current ? " selected" : ""}>${esc(label)}</option>`;
-}
 
 // ------------------------------------------------------------------ KaTeX
 
@@ -680,17 +618,6 @@ function dcPanel(c: ElecMap): string {
   <tfoot><tr><td colspan="3">${t.powerBalance} (Σ P)</td><td class="num">${si(Math.abs(balance) < 1e-12 ? 0 : balance, "W")}</td></tr></tfoot></table>
 </div>
 <p class="pg-note">${notes.join(" · ")}</p>`;
-}
-
-/** A node name inside LaTeX. */
-const texName = (name: string): string => `\\mathrm{${name.replace(/[_#%&${}]/g, "\\$&")}}`;
-
-function attempt<T>(f: () => T): T | undefined {
-  try {
-    return f();
-  } catch {
-    return undefined;
-  }
 }
 
 function typeName(comp: ComponentJSON): string {
