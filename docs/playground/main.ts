@@ -30,81 +30,17 @@ import {
 } from "./format";
 import type { Tab } from "./examples";
 import { STRINGS } from "./i18n";
+import { defaultState, detectLang, fixSelections, sourceIds, toggle, VOLTAGE } from "./state";
+import type { State } from "./state";
 import { Viewport } from "./viewport";
 import "./style.css";
 import type { Lang, Strings } from "./i18n";
 
 // ------------------------------------------------------------------ state
 
-interface State {
-  netlist: string;
-  tab: Tab;
-  /** Transfer function. */
-  input: string;
-  outKind: "voltage" | "current";
-  output: string;
-  reference: string;
-  outCurrent: string;
-  literal: boolean;
-  fStart: string;
-  fStop: string;
-  /** Monte-Carlo envelope of the Bode plot (tolerances in %). */
-  mc: boolean;
-  tolR: string;
-  tolC: string;
-  tolL: string;
-  tolOther: string;
-  runs: string;
-  /** Transient. */
-  tStop: string;
-  tStep: string;
-  method: "gear2" | "trap" | "euler";
-  traces: string[];
-  currents: string[];
-  /** Impedance. */
-  zA: string;
-  zB: string;
-  /** Schematic. */
-  style: "iec" | "ansi";
-  /** Input: netlist text or block drawing. */
-  mode: "text" | "draw";
-}
+const state: State = defaultState(EXAMPLES[0] as (typeof EXAMPLES)[0]);
 
-const first = EXAMPLES[0] as (typeof EXAMPLES)[0];
-const state: State = {
-  netlist: first.netlist,
-  tab: first.tab,
-  input: "",
-  outKind: "voltage",
-  output: first.output ?? "",
-  reference: "",
-  outCurrent: "",
-  literal: false,
-  fStart: "",
-  fStop: "",
-  mc: false,
-  tolR: "5",
-  tolC: "10",
-  tolL: "10",
-  tolOther: "",
-  runs: "100",
-  tStop: first.tStop !== undefined ? spice(first.tStop) : "",
-  tStep: "",
-  method: "gear2",
-  traces: first.trace ?? [],
-  currents: [],
-  zA: "",
-  zB: "",
-  style: "iec",
-  mode: "text",
-};
-
-const params = new URLSearchParams(location.search);
-const lang: Lang =
-  params.get("lang") === "fr" ||
-  (params.get("lang") === null && navigator.language.toLowerCase().startsWith("fr"))
-    ? "fr"
-    : "en";
+const lang: Lang = detectLang(location.search, navigator.language);
 const t: Strings = STRINGS[lang];
 document.documentElement.lang = lang;
 
@@ -311,43 +247,10 @@ function compile(): void {
     circuit = undefined;
     status.innerHTML = errorBox(err);
   }
-  fixSelections();
+  if (circuit) selected = fixSelections(state, circuit, ground, selected);
   drawSchematic();
   if (state.mode === "draw") blocks?.setCircuit(circuit);
   renderPanel();
-}
-
-/** Keeps the selected nodes and components valid after an edit. */
-function fixSelections(): void {
-  if (!circuit) return;
-  const nodes = circuit.nodes();
-  const ids = circuit.components().map((c) => c.id);
-  const sources = sourceIds();
-  const guess = nodes.includes("out") ? "out" : (nodes[nodes.length - 1] ?? ground);
-  if (!nodes.includes(state.output)) state.output = guess;
-  if (state.reference !== "" && !nodes.includes(state.reference)) state.reference = "";
-  if (!ids.includes(state.outCurrent)) state.outCurrent = ids[0] ?? "";
-  const inputOk =
-    sources.includes(state.input) ||
-    (state.input.startsWith(VOLTAGE) && nodes.includes(state.input.slice(VOLTAGE.length)));
-  if (state.input !== "" && !inputOk) state.input = "";
-  state.traces = state.traces.filter((n) => nodes.includes(n));
-  state.currents = state.currents.filter((id) => ids.includes(id));
-  if (state.traces.length === 0 && state.currents.length === 0) {
-    state.traces = nodes.includes("in") && guess !== "in" ? ["in", guess] : [guess];
-  }
-  if (!nodes.includes(state.zA)) state.zA = nodes[0] ?? "";
-  if (state.zB !== ground && !nodes.includes(state.zB)) state.zB = ground;
-  if (selected !== undefined && !ids.includes(selected)) selected = undefined;
-}
-
-/** Prefix of an input that is a node voltage (`v:in`) rather than a source id. */
-const VOLTAGE = "v:";
-
-function sourceIds(): string[] {
-  return (circuit?.components() ?? [])
-    .filter((c) => c.type === "vsource" || c.type === "isource")
-    .map((c) => c.id);
 }
 
 // -------------------------------------------------------------- schematic
@@ -525,12 +428,6 @@ function probe(kind: "node" | "part", value: string): void {
   showView("analysis");
 }
 
-function toggle(list: string[], value: string): void {
-  const i = list.indexOf(value);
-  if (i >= 0) list.splice(i, 1);
-  else list.push(value);
-}
-
 // ------------------------------------------------------------------ panel
 
 function renderTabs(): void {
@@ -563,7 +460,7 @@ function renderPanel(): void {
     return;
   }
   if (!circuit) return;
-  if (sourceIds().length === 0 && state.tab !== "impedance") {
+  if (sourceIds(circuit).length === 0 && state.tab !== "impedance") {
     panel.innerHTML = `<p class="pg-note">${t.sources}</p>`;
     highlight();
     return;
@@ -637,7 +534,7 @@ function transferPanel(c: ElecMap): string {
   const controls = `
 <div class="pg-controls">
   <label>${t.input}
-    <select data-bind="input">${option("", `${t.auto}`, state.input)}${sourceIds()
+    <select data-bind="input">${option("", `${t.auto}`, state.input)}${sourceIds(circuit)
       .map((id) => option(id, id, state.input))
       .join("")}${nodes
       .filter((n) => n !== state.output)
