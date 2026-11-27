@@ -1,8 +1,8 @@
 /**
  * Bode plots and the metrics of a transfer function: frequency range, phase
- * ticks, the plot itself, the metrics list and the frequency controls. Pure:
- * the state, the strings and the figure builder are passed in, and every
- * function returns HTML for the page to insert.
+ * ticks, the gain floor, the plot itself, the metrics list and the frequency
+ * controls. Pure: the state, the strings and the figure builder are passed in,
+ * and every function returns HTML for the page to insert.
  */
 import type { Complex, TransferFunction } from "../../src";
 import type { PlotOptions } from "../site/plot";
@@ -21,6 +21,12 @@ export type ControlState = Pick<
   State,
   "fStart" | "fStop" | "mc" | "tolR" | "tolC" | "tolL" | "tolOther" | "runs"
 >;
+
+/** Lowest gain plotted: 120 dB below the finite peak of `magnitudeDb`, and at most -40 dB. */
+export function gainFloor(magnitudeDb: readonly number[]): number {
+  const peak = Math.max(...magnitudeDb.filter(Number.isFinite));
+  return Math.min(peak - 120, -40);
+}
 
 /**
  * Plotted frequency range: the user's bounds when valid, else the range of
@@ -59,8 +65,7 @@ export function bodePlot(
 ): string {
   const [fStart, fStop] = frequencyRange(H, input);
   const bode = H.bode({ fStart, fStop, points: 400 });
-  const peak = Math.max(...bode.magnitudeDb.filter(Number.isFinite));
-  const floor = Math.min(peak - 120, -40);
+  const floor = gainFloor(bode.magnitudeDb);
   const gain = bode.magnitudeDb.map((v) => Math.max(v, floor));
   return figure(
     {
