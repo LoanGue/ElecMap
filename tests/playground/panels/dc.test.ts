@@ -50,6 +50,19 @@ describe("playground DC panel", () => {
     expect(row(panel(coupled), "R1")).not.toContain("—");
   });
 
+  it("shows the balance when gmin leaks power from a floating node", () => {
+    const html = panel("I1 0 a 1m\nC1 a 0 1u\n");
+    expect(html).toMatch(/\(Σ P\)<\/td><td class="num">-1 MW<\/td>/);
+    expect(html).toContain(` · ${STRINGS.en.gmin}</p>`);
+  });
+
+  it("rounds a balance of numerical noise to zero", () => {
+    for (const id of ["common-emitter", "wheatstone"]) {
+      const example = EXAMPLES.find((e) => e.id === id);
+      expect(panel(example?.netlist ?? "")).toMatch(/\(Σ P\)<\/td><td class="num">0 W<\/td>/);
+    }
+  });
+
   it("marks only the selected component's row", () => {
     expect(panel(DIVIDER, "R2").match(/class="sel"/g)).toHaveLength(1);
     expect(panel(DIVIDER, "R2")).toContain(`<tr data-id="R2" class="sel">`);
