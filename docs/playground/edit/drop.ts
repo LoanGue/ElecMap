@@ -15,6 +15,7 @@ import type { Orientation } from "../../../src";
 import { centerOffset, onSegment as on, pinsOf, rotatable, TURN } from "../model";
 import type { Drawing, Part, Pt, Wire } from "../model";
 import { fit, insert } from "./fitting";
+import { endsOf, segment } from "../wires";
 import { move } from "./moves";
 
 /** Where a dropped part lands on a wire: its anchor and orientation. */
@@ -36,16 +37,41 @@ function foreign(d: Drawing, p: Part): Wire[] {
   return d.wires.filter((w) => !pins.some((q) => on(q, w)));
 }
 
+/** Connection points other than the part itself: wire ends, pins of the
+ * other parts, grounds, labels and user nodes. */
+function contacts(d: Drawing, p: Part): Pt[] {
+  return [
+    ...d.wires.flatMap(endsOf),
+    ...d.parts.filter((q) => q.id !== p.id).flatMap(pinsOf),
+    ...d.grounds,
+    ...d.labels,
+    ...d.nodes,
+  ];
+}
+
+/** No connection point strictly between the two pins: cutting the wire there
+ * would cut a T stem, a ground or a label off the circuit. */
+function clear(pins: Pt[], points: Pt[]): boolean {
+  const [a, b] = pins as [Pt, Pt];
+  const span = segment(a, b);
+  const pin = (q: Pt) => pins.some((r) => r.x === q.x && r.y === q.y);
+  return !points.some((q) => on(q, span) && !pin(q));
+}
+
 /**
  * Where part `id` lands when dropped with its anchor at `to`: as it is if
  * both pins fall on one wire, else turned a quarter around its centre if that
- * puts both pins on one wire. Undefined when no wire takes it, and for parts
- * that do not turn (op-amps, transistors). Lets the editor preview the turn.
+ * puts both pins on one wire. Undefined when no wire takes it, when another
+ * connection lies between the pins, and for parts that do not turn (op-amps,
+ * transistors). Lets the editor preview the turn.
  */
 export function landing(drawing: Drawing, id: string, to: Pt): Landing | undefined {
   const p = drawing.parts.find((q) => q.id === id);
   if (!p || !rotatable(p.kind)) return undefined;
-  const dir = fit(foreign(drawing, p), [p.dir, TURN[p.dir]], (d) => pinsOf(turned(p, to, d)));
+  const at = (d: Orientation) => pinsOf(turned(p, to, d));
+  const points = contacts(drawing, p);
+  const dirs = [p.dir, TURN[p.dir]].filter((d) => clear(at(d), points));
+  const dir = fit(foreign(drawing, p), dirs, at);
   if (dir === undefined) return undefined;
   const q = turned(p, to, dir);
   return { to: { x: q.x, y: q.y }, dir };
@@ -62,6 +88,10 @@ export function drop(drawing: Drawing, id: string, to: Pt): Drawing {
   if (!land) return move(drawing, { kind: "part", id, to });
   const p = drawing.parts.find((q) => q.id === id) as Part;
   const pins = pinsOf({ ...p, ...land.to, dir: land.dir });
+  // Cut first, on the wiring as drawn: re-routing may split the target at the
+  // new pins or merge it with collinear pieces, so it is found whole only here.
+  // Nothing else is connected between the pins (see `landing`), so the cut
+  // removes a bare piece of wire.
   const cut = { ...drawing, wires: insert(drawing.wires, pins) };
   return move(cut, { kind: "part", id, to: land.to, dir: land.dir });
 }
