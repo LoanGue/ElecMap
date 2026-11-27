@@ -149,10 +149,12 @@ describe("grounds, labels, clear and directives", () => {
     expect(freeLabel(drawing({ labels: names.map((name) => ({ x: 0, y: 0, name })) }))).toBe("x2");
   });
 
-  it("renames a label, trimmed, and refuses blank names or spaces", () => {
+  it("renames a label, trimmed, and refuses blank names or whitespace", () => {
     const d = addLabel(emptyDrawing(), { x: 0, y: 0 });
     expect(renameLabel(d, 0, "  vout ").labels[0]?.name).toBe("vout");
     expect(renameLabel(d, 0, "v out")).toBe(d);
+    expect(renameLabel(d, 0, "v\tout")).toBe(d);
+    expect(renameLabel(d, 0, " in ")).toBe(d);
     expect(renameLabel(d, 0, "  ")).toBe(d);
     expect(renameLabel(d, 3, "x")).toBe(d);
   });
