@@ -1,9 +1,13 @@
 /**
  * Moves in the block editor: a part dragged or turned, a ground or a label
  * dragged, or free wire ends pulled. The wires attached to what moves are
- * drawn again through the routing module, with the fewest bends, around the
- * part bodies; everything else (other pins, grounds, labels, user nodes)
- * stays where it is.
+ * drawn again through the routing module, with the fewest bends; everything
+ * else (other pins, grounds, labels, user nodes) stays where it is.
+ *
+ * Part bodies are a routing cost, not a wall: a body point costs 300 against
+ * 100 per bend, and the router only tries a straight wire, the two L shapes
+ * and Z shapes offset by at most 3 cells. A wire crosses a body when none of
+ * these candidates avoids it.
  *
  * Pure functions on grid units. The caller re-routes from the drawing as it
  * was when the drag began, and only when the grid point under the pointer
@@ -41,6 +45,7 @@ export function bodyOf(p: Part): Pt[] {
     return [1, 2, 3].map((i) => ({ x: a.x + i * dx, y: a.y + i * dy }));
   }
   if (p.kind === "opamp") return box(p.x - 4, p.y - 2, p.x - 1, p.y + 2);
+  // Neither two-pin nor op-amp: treated as a transistor (BJT or MOSFET).
   return box(p.x - 2, p.y + 1, p.x + 1, p.y + 5);
 }
 
@@ -94,6 +99,8 @@ function anchors(d: Drawing, m: Moving): Pt[] {
 /**
  * The drawing after a move, its wires re-routed. Returns the same drawing
  * when the item is not found, and leaves the wiring alone when nothing moves.
+ * Part bodies after the move weigh on the routes but do not forbid them: a
+ * wire still crosses a body when every straight, L or Z candidate does.
  * `drawing` is not modified.
  */
 export function move(drawing: Drawing, m: Moving): Drawing {
