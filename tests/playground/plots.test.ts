@@ -18,6 +18,15 @@ describe("playground plots", () => {
     expect(axisFraction(LOG, 100)).toBeCloseTo(2 / 3);
   });
 
+  it("offsets both axes by their minimum", () => {
+    const lin = { min: 2, max: 12, log: false };
+    const log = { min: 10, max: 10000, log: true };
+    expect(axisValue(lin, 0.25)).toBe(4.5);
+    expect(axisFraction(lin, 4.5)).toBe(0.25);
+    expect(axisValue(log, 1 / 3)).toBeCloseTo(100);
+    expect(axisFraction(log, 1000)).toBeCloseTo(2 / 3);
+  });
+
   it("finds the nearest sample on a linear axis", () => {
     const xs = [0, 2, 4, 6, 8, 10];
     expect(nearestIndex(LIN, xs, 0.29)).toBe(1);
