@@ -12,7 +12,7 @@ import type {
   TransferOptions,
 } from "../../src";
 import type { Panel, PlotOptions } from "../site/plot";
-import { bodeControls, bodePlot, frequencyRange, metrics, phaseTicks } from "./bode";
+import { bodeControls, bodePlot, frequencyRange, gainFloor, metrics, phaseTicks } from "./bode";
 import { Editor, emptyDrawing, fromCircuit } from "./editor";
 import type { Drawing } from "./editor";
 import { EXAMPLES } from "./examples";
@@ -594,8 +594,7 @@ function monteCarloBode(c: ElecMap, spec: TransferOptions, H: TransferFunction):
   } catch (err) {
     return `<p class="pg-error">${esc(message(err))}</p>${bodePlot(H, state, t, figure)}`;
   }
-  const peak = Math.max(...bode.nominal.magnitudeDb.filter(Number.isFinite));
-  const floor = Math.min(peak - 120, -40);
+  const floor = gainFloor(bode.nominal.magnitudeDb);
   const clip = (v: readonly number[]) => v.map((x) => Math.max(x, floor));
   const spread: [string, (h: TransferFunction) => number | undefined, string][] = [
     [t.dcGain, (h) => h.dcGain(), ""],

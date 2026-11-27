@@ -5,6 +5,7 @@ import {
   bodeControls,
   bodePlot,
   frequencyRange,
+  gainFloor,
   metrics,
   phaseTicks,
 } from "../../docs/playground/bode";
@@ -98,5 +99,11 @@ describe("playground bode", () => {
     expect(on).toContain('class="pg-toggle on"');
     expect(bodeControls({ ...s, mc: false }, t, true)).toContain('class="pg-toggle"');
     expect(on).toContain('value="&lt;1&gt;"');
+  });
+
+  it("floors the gain 120 dB below a finite peak, at -40 dB at most", () => {
+    expect(gainFloor([-Infinity, 6, -300])).toBe(-114);
+    expect(gainFloor([-20, -50])).toBe(-140);
+    expect(gainFloor([90, Number.NaN])).toBe(-40);
   });
 });
