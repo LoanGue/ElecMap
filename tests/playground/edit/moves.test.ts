@@ -106,6 +106,35 @@ describe("playground moves", () => {
     expect(shape(out.wires)).toEqual(["2,0-2,3"]);
   });
 
+  it("keeps a wire end on a label that does not move", () => {
+    const d = drawing({
+      parts: [r("R1", 0, 0)],
+      labels: [{ x: 10, y: 0, name: "out" }],
+      wires: [w(4, 0, 10, 0)],
+    });
+    const out = move(d, { kind: "part", id: "R1", to: p(0, 3) });
+    expect(ends(out.wires)).toEqual(expect.arrayContaining(["10,0", "4,3"]));
+  });
+
+  it("routes around the new body of a turned part", () => {
+    // R1 turns from down to right; the L by (2, 0) would cross its new body.
+    const d = drawing({
+      parts: [r("R1", 0, -1, "down")],
+      grounds: [p(2, 5)],
+      wires: [w(0, 3, 2, 3), w(2, 3, 2, 5)],
+    });
+    const out = move(d, { kind: "part", id: "R1", to: p(0, 0), dir: "right" });
+    const body = bodyCells(out.parts);
+    expect(out.wires.some((v) => points(v).some((k) => body.has(k)))).toBe(false);
+    expect(ends(out.wires)).toEqual(expect.arrayContaining(["2,5", "4,0"]));
+  });
+
+  it("keeps a pin that sat on a ground connected when it moves", () => {
+    const d = drawing({ parts: [r("R1", 0, 0)], grounds: [p(4, 0)] });
+    const out = move(d, { kind: "part", id: "R1", to: p(0, 2) });
+    expect(shape(out.wires)).toEqual(["4,0-4,2"]);
+  });
+
   it("moves free wire ends together", () => {
     const d = drawing({ wires: [w(0, 0, 4, 0)] });
     const out = move(d, {
