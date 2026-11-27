@@ -76,14 +76,15 @@ export function createPinch(): Pinch {
 }
 
 /**
- * One entry point for every pointer input: touch goes to the pinch first,
- * and while it is engaged the single-pointer gestures see nothing. The
- * pinch's cancel also drops whatever press or drag the gestures held.
+ * One entry point for every pointer input. Touch goes to the pinch first,
+ * and while it is engaged the single-pointer gestures see no touch input;
+ * the pinch's cancel also drops whatever press or drag they held. Mouse,
+ * pen and wheel inputs always reach the gestures, pinch or not.
  */
 export function routeTouch(gestures: Gestures, pinch: Pinch): (input: PointerInput) => Intent[] {
   return (input) => {
     const out = pinch.feed(input);
-    if (!pinch.engaged()) return gestures.feed(input);
+    if (input.pointerType !== "touch" || !pinch.engaged()) return gestures.feed(input);
     if (out.some((i) => i.kind === "cancel")) gestures.reset();
     return out;
   };
