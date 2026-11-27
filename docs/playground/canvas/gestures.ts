@@ -89,6 +89,7 @@ function wheel(i: PointerInput): Intent[] {
   if (i.ctrlKey || i.metaKey) {
     return dy === 0 ? [] : [{ kind: "zoom", at: point(i), factor: wheelFactor(dy) }];
   }
+  // `0 - dx` rather than `-dx`: a zero delta gives 0, not -0.
   return dx === 0 && dy === 0 ? [] : [{ kind: "pan", dx: 0 - dx, dy: 0 - dy }];
 }
 

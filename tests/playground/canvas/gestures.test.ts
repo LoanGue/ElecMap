@@ -94,6 +94,27 @@ describe("cancel and reset", () => {
     expect(run([up(20, 0)], g)).toEqual([]);
   });
 
+  it("a cancel mid-drag ends with exactly one cancel and never a dragEnd", () => {
+    const out = run([down(0, 0), move(20, 0), move(30, 0), { type: "cancel", x: 30, y: 0 }]);
+    expect(out[out.length - 1]).toEqual({ kind: "cancel" });
+    expect(out.filter((i) => i.kind === "cancel")).toHaveLength(1);
+    expect(out.some((i) => i.kind === "dragEnd")).toBe(false);
+  });
+
+  it("a cancel from another pointer leaves the press alone", () => {
+    const g = createGestures();
+    run([down(0, 0, { pointerId: 1 })], g);
+    expect(g.feed({ type: "cancel", x: 0, y: 0, pointerId: 2 })).toEqual([]);
+    expect(g.mode()).toBe("pending");
+  });
+
+  it("a cancel during a pan gives nothing and ends the pan", () => {
+    const g = createGestures();
+    run([down(0, 0, { button: 1 }), move(5, 0)], g);
+    expect(g.feed({ type: "cancel", x: 5, y: 0 })).toEqual([]);
+    expect(g.mode()).toBe("idle");
+  });
+
   it("reset drops the gesture and says so only when there was one", () => {
     const g = createGestures();
     expect(g.reset()).toEqual([]);
