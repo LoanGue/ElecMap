@@ -78,6 +78,35 @@ describe("canvas scene from an engine layout", () => {
     expect(key(pnp, "Q1")).toMatchObject({ kind: "pnp", orientation: "right" });
   });
 
+  it("keys variants from the compiled component", () => {
+    const variants = (netlist: string) =>
+      layoutScene(new ElecMap(netlist).layout(), { ...opts(), style: "ansi" }).symbols.map((q) => [
+        q.id,
+        q.key.variant,
+      ]);
+    expect(variants("V1 a 0 DC 1\nS1 a b OFF\nR1 b 0 1k\n")).toEqual([
+      ["V1", ""],
+      ["S1", "open"],
+      ["R1", ""],
+    ]);
+    expect(variants("V1 a 0 PULSE(0 5 0 1u 1u 1m 2m) AC 1\nR1 a 0 1k\n")).toEqual([
+      ["V1", "sine"],
+      ["R1", ""],
+    ]);
+  });
+
+  it("puts the net junctions as dots in world pixels, lit by their node name", () => {
+    const netlist = EXAMPLES.find((e) => e.id === "inverting")?.netlist ?? "";
+    const layout = new ElecMap(netlist).layout();
+    expect(layoutScene(layout, opts()).dots).toEqual([
+      { x: 15 * CELL, y: 0, user: false, hl: false },
+    ]);
+    const lit = layoutScene(layout, { ...opts(), highlight: { nodes: new Set(["m"]) } });
+    expect(lit.dots).toEqual([{ x: 15 * CELL, y: 0, user: false, hl: true }]);
+    const other = layoutScene(layout, { ...opts(), highlight: { nodes: new Set(["out"]) } });
+    expect(other.dots.map((d) => d.hl)).toEqual([false]);
+  });
+
   it("highlights the nets, dots, grounds and parts asked for", () => {
     const layout = new ElecMap(RC).layout();
     const s = layoutScene(layout, {
