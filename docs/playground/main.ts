@@ -4,14 +4,14 @@
  */
 import { ElecMap } from "../../src";
 import type { Panel, PlotOptions } from "../site/plot";
-import { bodeControls, frequencyRange, phaseTicks } from "./bode";
 import type { PanelContext } from "./panels/context";
 import { dcPanel } from "./panels/dc";
+import { impedancePanel } from "./panels/impedance";
 import { transferPanel } from "./panels/transfer";
 import { Editor, emptyDrawing, fromCircuit } from "./editor";
 import type { Drawing } from "./editor";
 import { EXAMPLES } from "./examples";
-import { attempt, esc, message, option, parseNumber, si, spice, texName } from "./format";
+import { esc, message, option, parseNumber, si, spice } from "./format";
 import type { Tab } from "./examples";
 import { STRINGS } from "./i18n";
 import { figure as plotFigure, onPlotLeave, onPlotMove, plotRegistry } from "./plots";
@@ -433,7 +433,7 @@ function renderPanel(): void {
       dc: (c: ElecMap) => dcPanel(c, panelContext()),
       transfer: (c: ElecMap) => transferPanel(c, panelContext()),
       transient: transientPanel,
-      impedance: impedancePanel,
+      impedance: (c: ElecMap) => impedancePanel(c, panelContext()),
     }[state.tab](circuit);
   } catch (err) {
     panel.innerHTML = errorBox(err);
@@ -507,59 +507,6 @@ function transientPanel(c: ElecMap): string {
     units.push(["A", 4]);
   }
   return `${controls}${figure({ xLabel: t.time, xFormat: (v) => si(v, "s", 3), panels }, units)}`;
-}
-
-// Impedance ---------------------------------------------------------------
-
-function impedancePanel(c: ElecMap): string {
-  const nodes = c.nodes();
-  const all = [...nodes, ground];
-  const controls = `
-<div class="pg-controls">
-  <label>${t.between}<select data-bind="zA">${nodes.map((n) => option(n, n, state.zA)).join("")}</select></label>
-  <label>${t.and}<select data-bind="zB">${all
-    .filter((n) => n !== state.zA)
-    .map((n) => option(n, n, state.zB))
-    .join("")}</select></label>
-</div>`;
-  const b = state.zB === ground ? undefined : state.zB;
-  const Z = c.impedance(state.zA, b);
-  const items: [string, string][] = [
-    [t.zDc, si(Z.dcGain(), "Ω")],
-    [t.zHf, si(Z.highFrequencyGain(), "Ω")],
-  ];
-  const r = attempt(() => c.equivalentResistance(state.zA, b));
-  items.push([
-    t.equivalentR,
-    r === undefined ? `<span class="pg-dim">${t.notResistive}</span>` : si(r, "Ω"),
-  ]);
-  const th = attempt(() => c.thevenin(state.zA, b));
-  if (th) items.push([t.thevenin, `${si(th.voltage, "V")} · ${si(th.resistance, "Ω")}`]);
-  const [fStart, fStop] = frequencyRange(Z, state);
-  const bode = Z.bode({ fStart, fStop, points: 400 });
-  const label = `Z_{${texName(state.zA)}${b ? `,${texName(b)}` : ""}}(s)`;
-  return `${controls}
-<div class="pg-math" data-tex="${esc(`${label} = ${Z.toLatex()}`)}"></div>
-<dl class="pg-metrics">${items.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>
-${bodeControls(state, t)}
-${figure(
-  {
-    logX: true,
-    xLabel: t.frequency,
-    panels: [
-      { series: [{ x: bode.freq, y: bode.magnitude, label: "|Z|" }], yLabel: t.zLabel, logY: true },
-      {
-        series: [{ x: bode.freq, y: bode.phase, label: "φ" }],
-        yLabel: t.phase,
-        yTicks: phaseTicks(bode.phase),
-      },
-    ],
-  },
-  [
-    ["Ω", 4],
-    ["°", 4],
-  ],
-)}`;
 }
 
 // ------------------------------------------------------------------ plots
