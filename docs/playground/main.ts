@@ -3,10 +3,10 @@
  * documentation (`docs/api/playground/`). Everything runs in the browser.
  */
 import { ElecMap } from "../../src";
-import type { ComponentJSON } from "../../src";
 import type { Panel, PlotOptions } from "../site/plot";
 import { bodeControls, frequencyRange, phaseTicks } from "./bode";
 import type { PanelContext } from "./panels/context";
+import { dcPanel } from "./panels/dc";
 import { transferPanel } from "./panels/transfer";
 import { Editor, emptyDrawing, fromCircuit } from "./editor";
 import type { Drawing } from "./editor";
@@ -430,7 +430,7 @@ function renderPanel(): void {
   }
   try {
     panel.innerHTML = {
-      dc: dcPanel,
+      dc: (c: ElecMap) => dcPanel(c, panelContext()),
       transfer: (c: ElecMap) => transferPanel(c, panelContext()),
       transient: transientPanel,
       impedance: impedancePanel,
@@ -440,48 +440,6 @@ function renderPanel(): void {
   }
   renderMath(panel);
   highlight();
-}
-
-// DC ----------------------------------------------------------------------
-
-function dcPanel(c: ElecMap): string {
-  const op = c.operatingPoint();
-  const nodes = c
-    .nodes()
-    .map(
-      (n) =>
-        `<tr data-node="${esc(n)}"><td><code>${esc(n)}</code></td><td class="num">${si(op.voltage(n), "V")}</td></tr>`,
-    )
-    .join("");
-  let balance = 0;
-  const rows = c
-    .components()
-    .map((comp) => {
-      const current = attempt(() => op.current(comp.id));
-      const power = attempt(() => op.power(comp.id));
-      if (power !== undefined) balance += power;
-      const cls = comp.id === selected ? ` class="sel"` : "";
-      return `<tr data-id="${esc(comp.id)}"${cls}><td><code>${esc(comp.id)}</code></td><td>${esc(typeName(comp))}</td>
-        <td class="num">${current === undefined ? "—" : si(current, "A")}</td>
-        <td class="num">${power === undefined ? "—" : si(power, "W")}</td></tr>`;
-    })
-    .join("");
-  const notes = [
-    op.iterations > 0 ? t.newton(op.iterations) : t.linear,
-    ...(op.gminUsed ? [t.gmin] : []),
-  ];
-  return `
-<div class="pg-grid2">
-  <table class="pg-table"><thead><tr><th>${t.node}</th><th class="num">${t.voltage}</th></tr></thead><tbody>${nodes}</tbody></table>
-  <table class="pg-table"><thead><tr><th>${t.component}</th><th>${t.type}</th><th class="num">${t.current}</th><th class="num">${t.power}</th></tr></thead>
-  <tbody>${rows}</tbody>
-  <tfoot><tr><td colspan="3">${t.powerBalance} (Σ P)</td><td class="num">${si(Math.abs(balance) < 1e-12 ? 0 : balance, "W")}</td></tr></tfoot></table>
-</div>
-<p class="pg-note">${notes.join(" · ")}</p>`;
-}
-
-function typeName(comp: ComponentJSON): string {
-  return t.types[comp.type] ?? comp.type;
 }
 
 // Transient ---------------------------------------------------------------
