@@ -60,6 +60,7 @@ describe("playground style sheet", () => {
 
   it("scans every playground module", () => {
     expect(files.some((f) => f.endsWith("main.ts"))).toBe(true);
+    expect(files.some((f) => f.endsWith(join("panels", "monte-carlo.ts")))).toBe(true);
     expect(files.length).toBeGreaterThan(1);
   });
 
