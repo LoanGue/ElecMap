@@ -7,7 +7,7 @@ import {
   SpriteCache,
   spriteKey,
 } from "../../../docs/playground/canvas/sprites";
-import type { Sprite } from "../../../docs/playground/canvas/sprites";
+import type { Sprite, SpriteKey, Variant } from "../../../docs/playground/canvas/sprites";
 import type { DrawOp } from "../../../docs/playground/canvas/svg-ops";
 import { PALETTE } from "../../../docs/playground/model";
 import type { Kind, Part } from "../../../docs/playground/model";
@@ -41,6 +41,29 @@ function vertices(o: DrawOp): [number, number][] {
     out.push([a * x + c * y + e, b * x + d * y + f]);
   }
   return out;
+}
+
+/** Extreme points of an op (path vertices, circle and rect corners), through its transform. */
+function extent(o: DrawOp): [number, number][] {
+  const local: [number, number][] =
+    o.op === "circle"
+      ? [
+          [o.cx - o.r, o.cy],
+          [o.cx + o.r, o.cy],
+          [o.cx, o.cy - o.r],
+          [o.cx, o.cy + o.r],
+        ]
+      : o.op === "rect"
+        ? [
+            [o.x, o.y],
+            [o.x + o.width, o.y + o.height],
+          ]
+        : [];
+  const [a, b, c, d, e, f] = o.transform;
+  return [
+    ...vertices(o),
+    ...local.map(([x, y]): [number, number] => [a * x + c * y + e, b * x + d * y + f]),
+  ];
 }
 
 /** World vertices of a sprite drawn for part `p`. */
@@ -114,5 +137,45 @@ describe("playground canvas sprites", () => {
       expect(s.anchor.y).toBeGreaterThan(0);
       expect(s.anchor.y).toBeLessThan(s.bounds.height);
     }
+  });
+  it("keeps open and closed switches apart in the cache", () => {
+    const cache = new SpriteCache();
+    const on = cache.get(spriteKey(part("switch", "right", { value: "ON" }), "iec"));
+    const off = cache.get(spriteKey(part("switch", "right", { value: "OFF" }), "iec"));
+    expect(off).not.toBe(on);
+    expect(cache.size).toBe(2);
+  });
+
+  it("draws the zener, sine and current variants differently", () => {
+    const pairs: [Kind, Variant][] = [
+      ["diode", "zener"],
+      ["vsource", "sine"],
+      ["bsource", "current"],
+    ];
+    for (const [kind, variant] of pairs) {
+      const key: SpriteKey = { kind, orientation: "right", style: "ansi", variant: "" };
+      expect(buildSprite({ ...key, variant }).ops, kind).not.toEqual(buildSprite(key).ops);
+    }
+    const diode = { id: "D1", type: "diode", nodes: ["a", "b"] };
+    const info = (c: object) => c as unknown as ComponentJSON;
+    expect(spriteKey(part("diode"), "iec", info(diode)).variant).toBe("");
+    expect(spriteKey(part("diode"), "iec", info({ ...diode, bv: 5.1 })).variant).toBe("zener");
+  });
+
+  it("keeps every op inside the sprite bounds", () => {
+    const variants: Variant[] = ["", "open", "current", "sine", "zener"];
+    for (const kind of PALETTE)
+      for (const style of ["iec", "ansi"] as const)
+        for (const orientation of ["right", "down", "left", "up"] as const)
+          for (const variant of variants) {
+            const s = buildSprite({ kind, orientation, style, variant });
+            for (const [x, y] of s.ops.flatMap(extent)) {
+              const at = `${kind} ${style} ${orientation} ${variant} ${x},${y}`;
+              expect(x, at).toBeGreaterThanOrEqual(s.bounds.x - 0.01);
+              expect(y, at).toBeGreaterThanOrEqual(s.bounds.y - 0.01);
+              expect(x, at).toBeLessThanOrEqual(s.bounds.x + s.bounds.width + 0.01);
+              expect(y, at).toBeLessThanOrEqual(s.bounds.y + s.bounds.height + 0.01);
+            }
+          }
   });
 });
