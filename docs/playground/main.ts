@@ -30,6 +30,8 @@ import {
 } from "./format";
 import type { Tab } from "./examples";
 import { STRINGS } from "./i18n";
+import { highlights, probe } from "./probe";
+import type { ProbeKind } from "./probe";
 import { defaultState, detectLang, fixSelections, sourceIds, toggle, VOLTAGE } from "./state";
 import type { State } from "./state";
 import { Viewport } from "./viewport";
@@ -378,17 +380,7 @@ function addHitBoxes(svg: Element): void {
 
 function decorate(svg: Element): void {
   addHitBoxes(svg);
-  const nodes = new Set<string>();
-  if (state.tab === "transfer" && state.outKind === "voltage") {
-    nodes.add(state.output);
-    if (state.reference) nodes.add(state.reference);
-  }
-  if (state.tab === "transient") state.traces.forEach((n) => nodes.add(n));
-  if (state.tab === "impedance") [state.zA, state.zB].forEach((n) => nodes.add(n));
-  const parts = new Set<string>();
-  if (selected) parts.add(selected);
-  if (state.tab === "transfer" && state.outKind === "current") parts.add(state.outCurrent);
-  if (state.tab === "transient") state.currents.forEach((id) => parts.add(id));
+  const { nodes, parts } = highlights(state, selected);
   for (const el of svg.querySelectorAll<SVGElement>("[data-node]")) {
     el.classList.toggle("hl", nodes.has(el.dataset["node"] ?? ""));
   }
@@ -404,27 +396,13 @@ function onSchematicClick(event: MouseEvent): void {
   const target = event.target as Element;
   const wire = target.closest<SVGElement>("[data-node]");
   const part = target.closest<SVGElement>("g[data-id], [data-hit]");
-  if (wire) probe("node", wire.dataset["node"] ?? "");
-  else if (part) probe("part", part.dataset["id"] ?? part.dataset["hit"] ?? "");
+  if (wire) onProbe("node", wire.dataset["node"] ?? "");
+  else if (part) onProbe("part", part.dataset["id"] ?? part.dataset["hit"] ?? "");
 }
 
 /** A node or a component was clicked: probe it in the current tab. */
-function probe(kind: "node" | "part", value: string): void {
-  if (kind === "node") {
-    const node = value;
-    if (state.tab === "transient") toggle(state.traces, node);
-    else if (state.tab === "impedance") state.zA = node;
-    else {
-      if (state.tab !== "transfer") state.tab = "transfer";
-      state.outKind = "voltage";
-      state.output = node;
-    }
-  } else {
-    const id = value;
-    selected = selected === id ? undefined : id;
-    if (state.tab === "transient") toggle(state.currents, id);
-    if (state.tab === "transfer" && state.outKind === "current") state.outCurrent = id;
-  }
+function onProbe(kind: ProbeKind, value: string): void {
+  selected = probe(state, selected, kind, value);
   showView("analysis");
 }
 
@@ -1457,7 +1435,7 @@ function wire(): void {
     t,
     style: () => state.style,
     changed: drawingChanged,
-    probe,
+    probe: onProbe,
     decorate,
   });
   const drawn = blocks;
