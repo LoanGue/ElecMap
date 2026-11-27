@@ -101,6 +101,11 @@ describe("remove", () => {
     expect(next.wires).toEqual([wire(0, 0, 4, 0), wire(4, 0, 8, 0)]);
   });
 
+  it("picks the first wire when several pass through the point", () => {
+    const next = remove(t, { kind: "wire", at: { x: 4, y: 0 } });
+    expect(next.wires).toEqual([wire(4, 0, 8, 0), wire(4, 0, 4, 4)]);
+  });
+
   it("keeps only the user nodes still on a junction", () => {
     const one = remove(t, { kind: "wire", at: { x: 4, y: 3 } });
     expect(one.nodes).toEqual([{ x: 4, y: 0 }]);

@@ -84,20 +84,21 @@ export function rotate(drawing: Drawing, id: string): Drawing {
   return move(drawing, { kind: "part", id, to, dir });
 }
 
-/** Index of the wire a wire selection picks: the nearest one to its point. */
+/** Index of the wire a wire selection picks: the nearest one to its point, the
+ * first of them at a tie (several wires through a junction). */
 function pickWire(drawing: Drawing, at: Pt): number {
   let best = -1;
   let dist = WIRE_PICK;
   drawing.wires.forEach((w, i) => {
     const v = distance(at, w);
-    if (v <= dist) [best, dist] = [i, v];
+    if (v < dist) [best, dist] = [i, v];
   });
   return best;
 }
 
 /**
  * The drawing without the selected items: parts by id, a wire by the
- * nearest one to its point (within half a cell), grounds and labels by
+ * nearest one to its point (less than half a cell away), grounds and labels by
  * their index in `drawing`. User nodes left with fewer than two wire arms
  * go too (`liveNodes`). Wires attached to a removed part stay.
  */
