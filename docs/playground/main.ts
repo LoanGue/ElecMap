@@ -3,10 +3,11 @@
  * documentation (`docs/api/playground/`). Everything runs in the browser.
  */
 import { ElecMap } from "../../src";
-import type { ComponentJSON, OutputSpec, TransferOptions } from "../../src";
+import type { ComponentJSON } from "../../src";
 import type { Panel, PlotOptions } from "../site/plot";
-import { bodeControls, bodePlot, frequencyRange, metrics, phaseTicks } from "./bode";
-import { monteCarloBode, monteCarloControls } from "./panels/monte-carlo";
+import { bodeControls, frequencyRange, phaseTicks } from "./bode";
+import type { PanelContext } from "./panels/context";
+import { transferPanel } from "./panels/transfer";
 import { Editor, emptyDrawing, fromCircuit } from "./editor";
 import type { Drawing } from "./editor";
 import { EXAMPLES } from "./examples";
@@ -16,7 +17,7 @@ import { STRINGS } from "./i18n";
 import { figure as plotFigure, onPlotLeave, onPlotMove, plotRegistry } from "./plots";
 import { highlights, probe } from "./probe";
 import type { ProbeKind } from "./probe";
-import { defaultState, detectLang, fixSelections, sourceIds, toggle, VOLTAGE } from "./state";
+import { defaultState, detectLang, fixSelections, sourceIds, toggle } from "./state";
 import type { State } from "./state";
 import { Viewport } from "./viewport";
 import "./style.css";
@@ -430,7 +431,7 @@ function renderPanel(): void {
   try {
     panel.innerHTML = {
       dc: dcPanel,
-      transfer: transferPanel,
+      transfer: (c: ElecMap) => transferPanel(c, panelContext()),
       transient: transientPanel,
       impedance: impedancePanel,
     }[state.tab](circuit);
@@ -481,78 +482,6 @@ function dcPanel(c: ElecMap): string {
 
 function typeName(comp: ComponentJSON): string {
   return t.types[comp.type] ?? comp.type;
-}
-
-// Transfer function -------------------------------------------------------
-
-function outputSpec(): OutputSpec {
-  if (state.outKind === "current") return { current: state.outCurrent };
-  return state.reference ? [state.output, state.reference] : state.output;
-}
-
-function transferPanel(c: ElecMap): string {
-  const nodes = c.nodes();
-  const ids = c.components().map((x) => x.id);
-  const controls = `
-<div class="pg-controls">
-  <label>${t.input}
-    <select data-bind="input">${option("", `${t.auto}`, state.input)}${sourceIds(circuit)
-      .map((id) => option(id, id, state.input))
-      .join("")}${nodes
-      .filter((n) => n !== state.output)
-      .map((n) => option(`${VOLTAGE}${n}`, `V(${n})`, state.input))
-      .join("")}</select></label>
-  <label>${t.output}
-    <select data-bind="outKind">${option("voltage", t.outputVoltage, state.outKind)}${option(
-      "current",
-      t.outputCurrent,
-      state.outKind,
-    )}</select>
-    ${
-      state.outKind === "voltage"
-        ? `<select data-bind="output">${nodes.map((n) => option(n, n, state.output)).join("")}</select>`
-        : `<select data-bind="outCurrent">${ids.map((n) => option(n, n, state.outCurrent)).join("")}</select>`
-    }</label>
-  ${
-    state.outKind === "voltage"
-      ? `<label>${t.reference}<select data-bind="reference">${option("", ground, state.reference)}${nodes
-          .filter((n) => n !== state.output)
-          .map((n) => option(n, n, state.reference))
-          .join("")}</select></label>`
-      : ""
-  }
-  <div class="pg-seg">
-    <button data-literal="0" class="${state.literal ? "" : "on"}">${t.numeric}</button>
-    <button data-literal="1" class="${state.literal ? "on" : ""}">${t.literal}</button>
-  </div>
-</div>`;
-
-  const node = state.input.startsWith(VOLTAGE) ? state.input.slice(VOLTAGE.length) : "";
-  const source = node ? "" : state.input;
-  const spec = { output: outputSpec(), ...(source ? { input: source } : {}) };
-  const full: TransferOptions = node ? { ...spec, input: { voltage: node } } : spec;
-  const H = c.transferFunction(full);
-  const name = state.outKind === "current" ? "\\frac{I(s)}{V_{in}(s)}" : "H(s)";
-  let latex = `${name} = ${H.toLatex()}`;
-  let literalNote = "";
-  if (state.literal && node) {
-    literalNote = `<p class="pg-note">${t.literalUnavailable}: V(${esc(node)})</p>`;
-  } else if (state.literal) {
-    try {
-      latex = `${name} = ${c.symbolicTransferFunction(spec).toLatex()}`;
-    } catch (err) {
-      literalNote = `<p class="pg-note">${t.literalUnavailable}: ${esc(message(err))}</p>`;
-    }
-  }
-  const warnings = c.transferWarnings(full).map((w) => `<li>${esc(w.message)}</li>`);
-  const warnBox = warnings.length
-    ? `<div class="pg-warn"><strong>${t.warnings}</strong><ul>${warnings.join("")}</ul></div>`
-    : "";
-  return `${controls}
-<div class="pg-math" data-tex="${esc(latex)}"></div>${literalNote}${warnBox}
-${metrics(H, t)}
-${bodeControls(state, t, monteCarloControls(state, t))}
-${state.mc ? monteCarloBode(c, full, H, state, t, figure) : bodePlot(H, state, t, figure)}`;
 }
 
 // Transient ---------------------------------------------------------------
@@ -687,6 +616,11 @@ function plotWidth(): number {
 
 function figure(options: PlotOptions, units: [string, number][]): string {
   return plotFigure(plots, options, units, plotWidth());
+}
+
+/** What the analysis panels read from the page, built on each render. */
+function panelContext(): PanelContext {
+  return { state, t, selected, ground, figure };
 }
 
 // ------------------------------------------------------------------ share
