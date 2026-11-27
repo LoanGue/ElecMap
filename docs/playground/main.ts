@@ -12,8 +12,7 @@ import type {
   TransferFunction,
   TransferOptions,
 } from "../../src";
-import { plot } from "../site/plot";
-import type { Panel, Series } from "../site/plot";
+import type { Panel, PlotOptions } from "../site/plot";
 import { Editor, emptyDrawing, fromCircuit } from "./editor";
 import type { Drawing } from "./editor";
 import { EXAMPLES } from "./examples";
@@ -30,6 +29,7 @@ import {
 } from "./format";
 import type { Tab } from "./examples";
 import { STRINGS } from "./i18n";
+import { figure as plotFigure, onPlotLeave, onPlotMove, plotRegistry } from "./plots";
 import { highlights, probe } from "./probe";
 import type { ProbeKind } from "./probe";
 import { defaultState, detectLang, fixSelections, sourceIds, toggle, VOLTAGE } from "./state";
@@ -891,13 +891,7 @@ ${figure(
 
 // ------------------------------------------------------------------ plots
 
-interface PlotData {
-  panels: { series: Series[]; unit: string; digits: number }[];
-  xFormat: (v: number) => string;
-}
-
-const plots = new Map<string, PlotData>();
-let plotCount = 0;
+const plots = plotRegistry();
 
 /** Plots are drawn at the width of the panel, so their text keeps its size. */
 function plotWidth(): number {
@@ -905,85 +899,8 @@ function plotWidth(): number {
   return Math.max(320, Math.round(w > 0 ? w : 560));
 }
 
-/** A plot with a cursor that reads every series at the mouse position. */
-function figure(options: Parameters<typeof plot>[0], units: [string, number][]): string {
-  const id = `p${++plotCount}`;
-  const xFormat = options.xFormat ?? ((v: number) => si(v, "Hz", 4));
-  plots.set(id, {
-    panels: options.panels.map((p, i) => ({
-      series: p.series,
-      unit: units[i]?.[0] ?? "",
-      digits: units[i]?.[1] ?? 4,
-    })),
-    xFormat,
-  });
-  return `<figure class="pg-plot" data-plot="${id}">${plot({ width: plotWidth(), panelHeight: 130, ...options })}<div class="pg-cursor" hidden></div><div class="pg-readout" hidden></div></figure>`;
-}
-
-function onPlotMove(event: MouseEvent): void {
-  const fig = (event.target as Element).closest<HTMLElement>("[data-plot]");
-  if (!fig) return;
-  const svg = fig.querySelector<SVGSVGElement>("svg");
-  const data = plots.get(fig.dataset["plot"] ?? "");
-  const cursor = fig.querySelector<HTMLElement>(".pg-cursor");
-  const readout = fig.querySelector<HTMLElement>(".pg-readout");
-  if (!svg || !data || !cursor || !readout) return;
-  const box = svg.getBoundingClientRect();
-  const scale = box.width / svg.viewBox.baseVal.width;
-  const left = Number(svg.dataset["left"]);
-  const right = Number(svg.dataset["right"]);
-  const px = (event.clientX - box.left) / scale;
-  if (px < left || px > right) {
-    cursor.hidden = true;
-    readout.hidden = true;
-    return;
-  }
-  const min = Number(svg.dataset["xmin"]);
-  const max = Number(svg.dataset["xmax"]);
-  const u = (px - left) / (right - left);
-  const x =
-    svg.dataset["log"] === "1"
-      ? 10 ** (Math.log10(min) + u * (Math.log10(max) - Math.log10(min)))
-      : min + u * (max - min);
-  const xs = data.panels[0]?.series[0]?.x ?? [];
-  let k = 0;
-  let lo = 0;
-  let hi = xs.length - 1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    if ((xs[mid] as number) < x) lo = mid + 1;
-    else hi = mid - 1;
-  }
-  k = Math.min(Math.max(lo, 0), xs.length - 1);
-  if (k > 0 && Math.abs((xs[k - 1] as number) - x) < Math.abs((xs[k] as number) - x)) k--;
-  const figBox = fig.getBoundingClientRect();
-  const sx = box.left - figBox.left;
-  const xAt =
-    svg.dataset["log"] === "1"
-      ? (Math.log10(xs[k] as number) - Math.log10(min)) / (Math.log10(max) - Math.log10(min))
-      : ((xs[k] as number) - min) / (max - min);
-  cursor.hidden = false;
-  cursor.style.left = `${sx + (left + xAt * (right - left)) * scale}px`;
-  cursor.style.top = `${box.top - figBox.top}px`;
-  cursor.style.height = `${box.height}px`;
-  const lines = data.panels.flatMap((p) =>
-    p.series.map((s, i) => {
-      const v = s.y[k] ?? NaN;
-      return `<div><i class="c${(i % 5) + 1}"></i>${esc(s.label ?? "")} <b>${si(v, p.unit, p.digits)}</b></div>`;
-    }),
-  );
-  readout.hidden = false;
-  readout.innerHTML = `<div class="pg-readout-x">${data.xFormat(xs[k] as number)}</div>${lines.join("")}`;
-  const cx = event.clientX - figBox.left;
-  const flip = cx > figBox.width * 0.6;
-  readout.style.left = flip ? "" : `${cx + 14}px`;
-  readout.style.right = flip ? `${figBox.width - cx + 14}px` : "";
-  readout.style.top = `${Math.max(event.clientY - figBox.top - 20, 0)}px`;
-}
-
-function onPlotLeave(event: MouseEvent): void {
-  const fig = (event.target as Element).closest<HTMLElement>("[data-plot]");
-  fig?.querySelectorAll<HTMLElement>(".pg-cursor, .pg-readout").forEach((el) => (el.hidden = true));
+function figure(options: PlotOptions, units: [string, number][]): string {
+  return plotFigure(plots, options, units, plotWidth());
 }
 
 // ------------------------------------------------------------------ share
@@ -1490,7 +1407,7 @@ function wire(): void {
       : `[data-node="${CSS.escape(row.dataset["node"] ?? "")}"]`;
     svg.querySelectorAll(sel).forEach((el) => el.classList.add("hover"));
   });
-  panel.addEventListener("mousemove", onPlotMove);
+  panel.addEventListener("mousemove", (e) => onPlotMove(plots, e));
   panel.addEventListener("mouseleave", onPlotLeave, true);
   window.addEventListener("hashchange", () => {
     if (readHash()) {
