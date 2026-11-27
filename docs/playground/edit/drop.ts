@@ -14,8 +14,7 @@
 import type { Orientation } from "../../../src";
 import { centerOffset, onSegment as on, pinsOf, TURN } from "../model";
 import type { Drawing, Part, Pt, Wire } from "../model";
-import { fit, insert } from "./fitting";
-import { endsOf, segment } from "../wires";
+import { contacts, fit, insert, spanClear } from "./fitting";
 import { move } from "./moves";
 
 /** Where a dropped part lands on a wire: its anchor and orientation. */
@@ -37,27 +36,6 @@ function foreign(d: Drawing, p: Part): Wire[] {
   return d.wires.filter((w) => !pins.some((q) => on(q, w)));
 }
 
-/** Connection points other than the part itself: wire ends, pins of the
- * other parts, grounds, labels and user nodes. */
-function contacts(d: Drawing, p: Part): Pt[] {
-  return [
-    ...d.wires.flatMap(endsOf),
-    ...d.parts.filter((q) => q.id !== p.id).flatMap(pinsOf),
-    ...d.grounds,
-    ...d.labels,
-    ...d.nodes,
-  ];
-}
-
-/** No connection point strictly between the two pins: cutting the wire there
- * would cut a T stem, a ground or a label off the circuit. */
-function clear(pins: Pt[], points: Pt[]): boolean {
-  const [a, b] = pins as [Pt, Pt];
-  const span = segment(a, b);
-  const pin = (q: Pt) => pins.some((r) => r.x === q.x && r.y === q.y);
-  return !points.some((q) => on(q, span) && !pin(q));
-}
-
 /**
  * Where part `id` lands when dropped with its anchor at `to`: as it is if
  * both pins fall on one wire, else turned a quarter around its centre if that
@@ -69,8 +47,8 @@ export function landing(drawing: Drawing, id: string, to: Pt): Landing | undefin
   const p = drawing.parts.find((q) => q.id === id);
   if (!p) return undefined;
   const at = (d: Orientation) => pinsOf(turned(p, to, d));
-  const points = contacts(drawing, p);
-  const dirs = [p.dir, TURN[p.dir]].filter((d) => clear(at(d), points));
+  const points = contacts(drawing, p.id);
+  const dirs = [p.dir, TURN[p.dir]].filter((d) => spanClear(at(d), points));
   const dir = fit(foreign(drawing, p), dirs, at);
   if (dir === undefined) return undefined;
   const q = turned(p, to, dir);
