@@ -80,7 +80,11 @@ const at = (x: number, y: number): string => `${x},${y}`;
 const px = (p: Pt): Pt => ({ x: p.x * CELL, y: p.y * CELL });
 
 /** Sprite key of a part and the translation putting its anchor on the part. */
-function symbol(p: Part, opts: SceneOptions, info?: ComponentJSON) {
+export function symbol(
+  p: Part,
+  opts: Pick<SceneOptions, "style" | "sprites">,
+  info?: ComponentJSON,
+) {
   const key = spriteKey(p, opts.style, info);
   const { anchor } = opts.sprites.get(key);
   return { key, translate: { x: p.x * CELL - anchor.x, y: p.y * CELL - anchor.y } };
