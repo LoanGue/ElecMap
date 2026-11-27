@@ -18,8 +18,10 @@ export const CELL = 20;
 export type SymbolStyle = "iec" | "ansi";
 
 /**
- * Visual variant a value can switch: an open switch, a current-controlled
+ * Visual variant a value can switch: an open switch, a current-output
  * behavioural source, a sine voltage source (ANSI glyph), a zener diode.
+ * The MOSFET bulk pin (`hasBulkPin` in svg.ts) is not keyed: netlist.ts ties
+ * bulk to source today. It must join the key once the netlist is editable (I6).
  */
 export type Variant = "" | "open" | "current" | "sine" | "zener";
 
