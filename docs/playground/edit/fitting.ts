@@ -5,8 +5,10 @@
  *
  * Pure functions on grid units; the editor owns the drawing.
  */
-import { onSegment as on } from "../model";
+import { onSegment as on, pinsOf } from "../model";
+import type { Drawing } from "../model";
 import type { Pt, Wire } from "../routing";
+import { endsOf, segment } from "../wires";
 
 const same = (a: Pt, b: Pt): boolean => a.x === b.x && a.y === b.y;
 
@@ -23,6 +25,27 @@ export function fit<D>(wires: Wire[], dirs: D[], pinsFor: (dir: D) => Pt[]): D |
     const pins = pinsFor(dir);
     return wires.some((w) => pins.every((p) => on(p, w)));
   });
+}
+
+/** Connection points of a drawing, the part `except` left out: wire ends, pins
+ * of the other parts, grounds, labels and user nodes. */
+export function contacts(d: Drawing, except?: string): Pt[] {
+  return [
+    ...d.wires.flatMap(endsOf),
+    ...d.parts.filter((q) => q.id !== except).flatMap(pinsOf),
+    ...d.grounds,
+    ...d.labels,
+    ...d.nodes,
+  ];
+}
+
+/** No connection point strictly between the two pins: cutting the wire there
+ * would cut a T stem, a ground or a label off the circuit. Check it before
+ * `insert`. */
+export function spanClear(pins: Pt[], points: Pt[]): boolean {
+  const [a, b] = pins as [Pt, Pt];
+  const span = segment(a, b);
+  return !points.some((q) => on(q, span) && !pins.some((r) => same(q, r)));
 }
 
 /**
