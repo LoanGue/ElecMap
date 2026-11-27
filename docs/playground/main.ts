@@ -4,7 +4,6 @@
  */
 import { ElecMap } from "../../src";
 import type {
-  Complex,
   ComponentJSON,
   MonteCarlo,
   MonteCarloBode,
@@ -13,20 +12,11 @@ import type {
   TransferOptions,
 } from "../../src";
 import type { Panel, PlotOptions } from "../site/plot";
+import { bodeControls, bodePlot, frequencyRange, metrics, phaseTicks } from "./bode";
 import { Editor, emptyDrawing, fromCircuit } from "./editor";
 import type { Drawing } from "./editor";
 import { EXAMPLES } from "./examples";
-import {
-  attempt,
-  complexText,
-  esc,
-  message,
-  option,
-  parseNumber,
-  si,
-  spice,
-  texName,
-} from "./format";
+import { attempt, esc, message, option, parseNumber, si, spice, texName } from "./format";
 import type { Tab } from "./examples";
 import { STRINGS } from "./i18n";
 import { figure as plotFigure, onPlotLeave, onPlotMove, plotRegistry } from "./plots";
@@ -566,9 +556,9 @@ function transferPanel(c: ElecMap): string {
     : "";
   return `${controls}
 <div class="pg-math" data-tex="${esc(latex)}"></div>${literalNote}${warnBox}
-${metrics(H)}
-${bodeControls(true)}
-${state.mc ? monteCarloBode(c, full, H) : bodePlot(H)}`;
+${metrics(H, t)}
+${bodeControls(state, t, true)}
+${state.mc ? monteCarloBode(c, full, H) : bodePlot(H, state, t, figure)}`;
 }
 
 /** Tolerances of the Monte-Carlo controls: R, C and L by kind, plus "id[.field] percent" entries. */
@@ -594,7 +584,7 @@ function tolerances(c: ElecMap): Record<string, number> {
 }
 
 function monteCarloBode(c: ElecMap, spec: TransferOptions, H: TransferFunction): string {
-  const [fStart, fStop] = frequencyRange(H);
+  const [fStart, fStop] = frequencyRange(H, state);
   let mc: MonteCarlo;
   let bode: MonteCarloBode;
   try {
@@ -602,7 +592,7 @@ function monteCarloBode(c: ElecMap, spec: TransferOptions, H: TransferFunction):
     mc = c.monteCarlo({ tolerances: tolerances(c), runs });
     bode = mc.bode(spec, { fStart, fStop, points: 40 });
   } catch (err) {
-    return `<p class="pg-error">${esc(message(err))}</p>${bodePlot(H)}`;
+    return `<p class="pg-error">${esc(message(err))}</p>${bodePlot(H, state, t, figure)}`;
   }
   const peak = Math.max(...bode.nominal.magnitudeDb.filter(Number.isFinite));
   const floor = Math.min(peak - 120, -40);
@@ -655,118 +645,6 @@ ${figure(
     ["°", 4],
   ],
 )}`;
-}
-
-function metrics(H: TransferFunction): string {
-  const items: [string, string][] = [];
-  const db = (g: number) =>
-    g === 0 ? "" : ` (${(20 * Math.log10(Math.abs(g))).toFixed(2).replace(/^-0\.00$/, "0.00")} dB)`;
-  const dc = H.dcGain();
-  items.push([t.dcGain, `${si(dc, "")}${Number.isFinite(dc) ? db(dc) : ""}`]);
-  const hf = H.highFrequencyGain();
-  items.push([t.hfGain, `${si(hf, "")}${Number.isFinite(hf) ? db(hf) : ""}`]);
-  items.push([t.filter, t.filters[H.filterType()] ?? H.filterType()]);
-  items.push([t.order, String(H.order)]);
-  const cutoffs = attempt(() => H.cutoffFrequencies()) ?? [];
-  if (cutoffs.length > 0) items.push([t.cutoff, cutoffs.map((f) => si(f, "Hz")).join(", ")]);
-  const f0 = H.naturalFrequency();
-  if (f0 !== undefined) items.push([t.f0, si(f0, "Hz")]);
-  const q = H.qFactor();
-  if (q !== undefined) items.push([t.q, q.toPrecision(4)]);
-  const zeta = H.dampingRatio();
-  if (zeta !== undefined) items.push([t.zeta, zeta.toPrecision(4)]);
-  if (H.filterType() === "bandpass") {
-    const peak = H.peakGain();
-    items.push([t.peak, `${si(peak, "")}${db(peak)} @ ${si(H.peakFrequency(), "Hz")}`]);
-  }
-  const bw = attempt(() => H.bandwidth());
-  if (bw !== undefined) items.push([t.bandwidth, si(bw, "Hz")]);
-  items.push([t.stable, H.isStable() ? t.yes : t.no]);
-  const roots = (list: Complex[]) =>
-    list.length === 0
-      ? t.none
-      : list
-          .map(
-            (p) =>
-              `${complexText(p, "rad/s")} <span class="pg-dim">(${si(p.abs() / (2 * Math.PI), "Hz")})</span>`,
-          )
-          .join("<br>");
-  return `<dl class="pg-metrics">${items
-    .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`)
-    .join("")}</dl>
-<div class="pg-grid2 pg-roots">
-  <div><h3>${t.poles}</h3><p>${roots(H.poles())}</p></div>
-  <div><h3>${t.zeros}</h3><p>${roots(H.zeros())}</p></div>
-</div>`;
-}
-
-function bodeControls(tolerance = false): string {
-  const pct = (key: "tolR" | "tolC" | "tolL", label: string) =>
-    `<label>${label} ±<input data-bind="${key}" value="${esc(state[key])}" size="3"> %</label>`;
-  const toggle = tolerance
-    ? `<button data-mc class="pg-toggle${state.mc ? " on" : ""}" title="${esc(t.mcHint)}">± ${t.mcEnvelope}</button>`
-    : "";
-  const mcRow =
-    tolerance && state.mc
-      ? `<div class="pg-controls pg-small pg-mc">
-  ${pct("tolR", "R")}${pct("tolC", "C")}${pct("tolL", "L")}
-  <label>${t.tolOther}<input data-bind="tolOther" value="${esc(state.tolOther)}" placeholder="${esc(t.tolOtherHint)}" size="14"></label>
-  <label><input data-bind="runs" value="${esc(state.runs)}" size="4"> ${t.runsLabel}</label>
-</div>`
-      : "";
-  return `<div class="pg-controls pg-small">
-  <label>${t.from}<input data-bind="fStart" placeholder="${t.auto}" value="${esc(state.fStart)}" size="7"> Hz</label>
-  <label>${t.to}<input data-bind="fStop" placeholder="${t.auto}" value="${esc(state.fStop)}" size="7"> Hz</label>
-  ${toggle}
-</div>${mcRow}`;
-}
-
-function frequencyRange(H: TransferFunction): [number, number] {
-  const [a, b] = H.frequencyRange();
-  const lo = parseNumber(state.fStart);
-  const hi = parseNumber(state.fStop);
-  const start = lo !== undefined && lo > 0 ? lo : a;
-  const stop = hi !== undefined && hi > start ? hi : Math.max(b, start * 10);
-  // Whole decades, so that the log axis ticks fall on 1, 10, 100…
-  return [10 ** Math.floor(Math.log10(start)), 10 ** Math.ceil(Math.log10(stop))];
-}
-
-function bodePlot(H: TransferFunction): string {
-  const [fStart, fStop] = frequencyRange(H);
-  const bode = H.bode({ fStart, fStop, points: 400 });
-  const peak = Math.max(...bode.magnitudeDb.filter(Number.isFinite));
-  const floor = Math.min(peak - 120, -40);
-  const gain = bode.magnitudeDb.map((v) => Math.max(v, floor));
-  return figure(
-    {
-      logX: true,
-      xLabel: t.frequency,
-      panels: [
-        { series: [{ x: bode.freq, y: gain, label: "|H|" }], yLabel: t.gainDb },
-        {
-          series: [{ x: bode.freq, y: bode.phase, label: "φ" }],
-          yLabel: t.phase,
-          yTicks: phaseTicks(bode.phase),
-        },
-      ],
-    },
-    [
-      ["dB", 4],
-      ["°", 4],
-    ],
-  );
-}
-
-/** Phase ticks on multiples of 45°, or of 90° and 180° for wide ranges. */
-function phaseTicks(phase: readonly number[]): number[] {
-  const lo = Math.min(...phase);
-  const hi = Math.max(...phase);
-  const span = hi - lo;
-  const step = span > 540 ? 180 : span > 200 ? 90 : 45;
-  const ticks: number[] = [];
-  for (let v = Math.floor(lo / step) * step; v <= Math.ceil(hi / step) * step; v += step)
-    ticks.push(v);
-  return ticks;
 }
 
 // Transient ---------------------------------------------------------------
@@ -862,13 +740,13 @@ function impedancePanel(c: ElecMap): string {
   ]);
   const th = attempt(() => c.thevenin(state.zA, b));
   if (th) items.push([t.thevenin, `${si(th.voltage, "V")} · ${si(th.resistance, "Ω")}`]);
-  const [fStart, fStop] = frequencyRange(Z);
+  const [fStart, fStop] = frequencyRange(Z, state);
   const bode = Z.bode({ fStart, fStop, points: 400 });
   const label = `Z_{${texName(state.zA)}${b ? `,${texName(b)}` : ""}}(s)`;
   return `${controls}
 <div class="pg-math" data-tex="${esc(`${label} = ${Z.toLatex()}`)}"></div>
 <dl class="pg-metrics">${items.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>
-${bodeControls()}
+${bodeControls(state, t)}
 ${figure(
   {
     logX: true,
