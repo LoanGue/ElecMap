@@ -26,6 +26,8 @@ const small = (): Drawing => ({
   ],
 });
 
+const pt = (x: number, y: number) => ({ x, y });
+
 const opts = (more: Partial<SceneOptions> = {}): SceneOptions => ({
   style: "iec",
   sprites: new SpriteCache(),
@@ -45,6 +47,7 @@ describe("canvas scene", () => {
     expect(s.symbols.map((q) => [q.id, q.key.kind, q.key.orientation])).toEqual([
       ["R1", "resistor", "right"],
     ]);
+    expect([s.outlines, s.ghost, s.preview]).toEqual([[], undefined, undefined]);
   });
 
   it("translates a symbol so the sprite anchor lands on the part", () => {
@@ -143,5 +146,67 @@ describe("canvas scene", () => {
     const info = new Map([["S1", { ...stub(S1, ["a", "b"]), closed: false } as ComponentJSON]]);
     expect(scene(d, opts()).symbols[0]?.key.variant).toBe("");
     expect(scene(d, opts({ info })).symbols[0]?.key.variant).toBe("open");
+  });
+
+  it("outlines the selected part, wire, ground and label, and nothing for a stale selection", () => {
+    const d = small();
+    const of = (selection: SceneOptions["selection"]) =>
+      scene(d, opts(selection ? { selection } : {})).outlines;
+    expect(of({ kind: "part", id: "R1" })).toEqual([
+      { kind: "rect", x: -22, y: -22, width: 124, height: 44 },
+    ]);
+    expect(of({ kind: "wire", at: { x: 7, y: 0 } })).toEqual([
+      { kind: "wire", x1: 80, y1: 0, x2: 160, y2: 0 },
+    ]);
+    expect(of({ kind: "ground", index: 0 })).toEqual([
+      { kind: "rect", x: 144, y: 74, width: 32, height: 38 },
+    ]);
+    expect(of({ kind: "label", index: 0 })).toEqual([
+      { kind: "rect", x: 112, y: 72, width: 16, height: 16 },
+    ]);
+    expect(of({ kind: "part", id: "R9" })).toEqual([]);
+    expect(of({ kind: "wire", at: { x: 30, y: 30 } })).toEqual([]);
+    expect(of({ kind: "label", index: 4 })).toEqual([]);
+  });
+
+  it("outlines an op-amp and a transistor around their pins and bodies", () => {
+    const X1: Part = { id: "X1", kind: "opamp", x: 10, y: 10, dir: "right", value: "" };
+    const Q1: Part = { id: "Q1", kind: "npn", x: 10, y: 10, dir: "right", value: "NPN" };
+    const of = (p: Part) =>
+      scene({ ...emptyDrawing(), parts: [p] }, opts({ selection: { kind: "part", id: p.id } }))
+        .outlines;
+    // Op-amp: pins at x-5 and x, body y-2..y+2; 12 px pad.
+    expect(of(X1)).toEqual([{ kind: "rect", x: 88, y: 148, width: 124, height: 104 }]);
+    // BJT: pins x-3..x, y..y+6, body reaching x+1; 12 px pad.
+    expect(of(Q1)).toEqual([{ kind: "rect", x: 128, y: 188, width: 104, height: 144 }]);
+  });
+
+  it("gives the ghost part and the wire preview", () => {
+    const sprites = new SpriteCache();
+    const C: Part = { id: "", kind: "capacitor", x: 10, y: 10, dir: "down", value: "" };
+    const s = scene(
+      emptyDrawing(),
+      opts({
+        sprites,
+        ghost: { kind: "part", part: C },
+        preview: [pt(0, 0), pt(0, 0), pt(0, -3), pt(5, -3)],
+      }),
+    );
+    const key = { kind: "capacitor", orientation: "down", style: "iec", variant: "" } as const;
+    const { anchor } = sprites.get(key);
+    expect(s.ghost).toEqual({
+      kind: "part",
+      key,
+      translate: { x: 200 - anchor.x, y: 200 - anchor.y },
+    });
+    expect(s.preview?.map((q) => [q.x, q.y])).toEqual([
+      [0, 0],
+      [0, -60],
+      [100, -60],
+    ]);
+    const one = scene(emptyDrawing(), opts({ preview: [pt(1, 1)] }));
+    expect(one.preview).toBeUndefined();
+    const g = scene(emptyDrawing(), opts({ ghost: { kind: "ground", at: { x: 2, y: 3 } } }));
+    expect(g.ghost).toEqual({ kind: "ground", x: 40, y: 60 });
   });
 });
