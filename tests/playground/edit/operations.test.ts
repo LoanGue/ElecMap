@@ -46,6 +46,13 @@ describe("place", () => {
     expect(next.wires).toEqual([wire(5, 0, 5, 3), wire(5, 7, 5, 10)]);
   });
 
+  it("drops a user node left on a single wire arm by the cut", () => {
+    const d = drawing({ wires: [wire(0, 5, 10, 5)], nodes: [{ x: 3, y: 5 }] });
+    const next = place(d, "resistor", { x: 5, y: 5 }, "right");
+    expect(next.wires).toEqual([wire(0, 5, 3, 5), wire(7, 5, 10, 5)]);
+    expect(next.nodes).toEqual([]);
+  });
+
   it("leaves the wires alone off a wire, and for parts that do not turn", () => {
     const d = drawing({ wires: [wire(5, 0, 5, 10)] });
     expect(place(d, "resistor", { x: 9, y: 5 }, "right").wires).toBe(d.wires);
