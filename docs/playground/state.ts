@@ -74,8 +74,9 @@ export function defaultState(example: Example): State {
 }
 
 /**
- * Interface language: `?lang=fr` or `?lang=en` in `search` wins; without it,
- * French when the browser language (`navLang`) is French; English otherwise.
+ * Interface language: `?lang=fr` in `search` gives French and any other `?lang`
+ * value gives English; without it, French when the browser language (`navLang`)
+ * is French, English otherwise.
  */
 export function detectLang(search: string, navLang: string): Lang {
   const asked = new URLSearchParams(search).get("lang");
