@@ -12,7 +12,7 @@
  * as they are (the caller applies `liveNodes`).
  */
 import type { Orientation } from "../../../src";
-import { centerOffset, onSegment as on, pinsOf, rotatable, TURN } from "../model";
+import { centerOffset, onSegment as on, pinsOf, TURN } from "../model";
 import type { Drawing, Part, Pt, Wire } from "../model";
 import { fit, insert } from "./fitting";
 import { endsOf, segment } from "../wires";
@@ -62,12 +62,12 @@ function clear(pins: Pt[], points: Pt[]): boolean {
  * Where part `id` lands when dropped with its anchor at `to`: as it is if
  * both pins fall on one wire, else turned a quarter around its centre if that
  * puts both pins on one wire. Undefined when no wire takes it, when another
- * connection lies between the pins, and for parts that do not turn (op-amps,
- * transistors). Lets the editor preview the turn.
+ * connection lies between the pins, and for op-amps and transistors (their
+ * pins are never all on one straight wire). Lets the editor preview the turn.
  */
 export function landing(drawing: Drawing, id: string, to: Pt): Landing | undefined {
   const p = drawing.parts.find((q) => q.id === id);
-  if (!p || !rotatable(p.kind)) return undefined;
+  if (!p) return undefined;
   const at = (d: Orientation) => pinsOf(turned(p, to, d));
   const points = contacts(drawing, p);
   const dirs = [p.dir, TURN[p.dir]].filter((d) => clear(at(d), points));
