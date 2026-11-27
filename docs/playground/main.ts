@@ -3,17 +3,10 @@
  * documentation (`docs/api/playground/`). Everything runs in the browser.
  */
 import { ElecMap } from "../../src";
-import type {
-  ComponentJSON,
-  MonteCarlo,
-  MonteCarloBode,
-  OutputSpec,
-  TransferFunction,
-  TransferOptions,
-} from "../../src";
+import type { ComponentJSON, OutputSpec, TransferOptions } from "../../src";
 import type { Panel, PlotOptions } from "../site/plot";
-import { bodeControls, bodePlot, frequencyRange, gainFloor, metrics, phaseTicks } from "./bode";
-import { monteCarloControls } from "./panels/monte-carlo";
+import { bodeControls, bodePlot, frequencyRange, metrics, phaseTicks } from "./bode";
+import { monteCarloBode, monteCarloControls } from "./panels/monte-carlo";
 import { Editor, emptyDrawing, fromCircuit } from "./editor";
 import type { Drawing } from "./editor";
 import { EXAMPLES } from "./examples";
@@ -559,92 +552,7 @@ function transferPanel(c: ElecMap): string {
 <div class="pg-math" data-tex="${esc(latex)}"></div>${literalNote}${warnBox}
 ${metrics(H, t)}
 ${bodeControls(state, t, monteCarloControls(state, t))}
-${state.mc ? monteCarloBode(c, full, H) : bodePlot(H, state, t, figure)}`;
-}
-
-/** Tolerances of the Monte-Carlo controls: R, C and L by kind, plus "id[.field] percent" entries. */
-function tolerances(c: ElecMap): Record<string, number> {
-  const byKind: Record<string, string> = {
-    resistor: state.tolR,
-    capacitor: state.tolC,
-    inductor: state.tolL,
-  };
-  const result: Record<string, number> = {};
-  for (const comp of c.components()) {
-    const pct = parseNumber(byKind[comp.type] ?? "");
-    if (pct !== undefined && pct > 0) result[comp.id] = pct / 100;
-  }
-  for (const entry of state.tolOther.split(/[,;\n]+/)) {
-    if (entry.trim() === "") continue;
-    const m = /^\s*([\w.]+)\s*[=:\s]\s*±?\s*([^\s%]+)\s*%?\s*$/.exec(entry);
-    const pct = m ? parseNumber(m[2] as string) : undefined;
-    if (!m || pct === undefined || pct < 0) throw new Error(`${t.tolSyntax}: "${entry.trim()}"`);
-    result[m[1] as string] = pct / 100;
-  }
-  return result;
-}
-
-function monteCarloBode(c: ElecMap, spec: TransferOptions, H: TransferFunction): string {
-  const [fStart, fStop] = frequencyRange(H, state);
-  let mc: MonteCarlo;
-  let bode: MonteCarloBode;
-  try {
-    const runs = Math.min(Math.max(Math.round(parseNumber(state.runs) ?? 100), 1), 2000);
-    mc = c.monteCarlo({ tolerances: tolerances(c), runs });
-    bode = mc.bode(spec, { fStart, fStop, points: 40 });
-  } catch (err) {
-    return `<p class="pg-error">${esc(message(err))}</p>${bodePlot(H, state, t, figure)}`;
-  }
-  const floor = gainFloor(bode.nominal.magnitudeDb);
-  const clip = (v: readonly number[]) => v.map((x) => Math.max(x, floor));
-  const spread: [string, (h: TransferFunction) => number | undefined, string][] = [
-    [t.dcGain, (h) => h.dcGain(), ""],
-    [t.cutoff, (h) => attempt(() => h.cutoffFrequency()), "Hz"],
-    [t.f0, (h) => h.naturalFrequency(), "Hz"],
-    [t.q, (h) => h.qFactor(), ""],
-  ];
-  const rows = spread
-    .map(([label, f, unit]) => {
-      const s = mc.statistics((x) => f(x.transferFunction(spec)));
-      if (!Number.isFinite(s.nominal) || s.nominal === 0 || !Number.isFinite(s.min)) return "";
-      if (s.max - s.min <= Math.abs(s.nominal) * 1e-9) return "";
-      const num = (v: number) => (unit ? si(v, unit) : v.toPrecision(4));
-      const rel = (v: number) =>
-        `${v >= s.nominal ? "+" : "−"}${Math.abs((v / s.nominal - 1) * 100).toFixed(1)} %`;
-      return `<div><dt>${label}</dt><dd>${num(s.min)} … ${num(s.max)}<small>${rel(s.min)} / ${rel(s.max)} · σ ${num(s.std)}</small></dd></div>`;
-    })
-    .join("");
-  return `<dl class="pg-metrics pg-mc-stats">${rows}</dl>
-${figure(
-  {
-    logX: true,
-    xLabel: t.frequency,
-    panels: [
-      {
-        bands: [
-          {
-            x: bode.freq,
-            lo: clip(bode.magnitudeDb.min),
-            hi: clip(bode.magnitudeDb.max),
-            label: `${mc.length} ${t.runsLabel}`,
-          },
-        ],
-        series: [{ x: bode.freq, y: clip(bode.nominal.magnitudeDb), label: t.nominal }],
-        yLabel: t.gainDb,
-      },
-      {
-        bands: [{ x: bode.freq, lo: bode.phase.min, hi: bode.phase.max }],
-        series: [{ x: bode.freq, y: bode.nominal.phase, label: "φ" }],
-        yLabel: t.phase,
-        yTicks: phaseTicks([...bode.phase.min, ...bode.phase.max]),
-      },
-    ],
-  },
-  [
-    ["dB", 4],
-    ["°", 4],
-  ],
-)}`;
+${state.mc ? monteCarloBode(c, full, H, state, t, figure) : bodePlot(H, state, t, figure)}`;
 }
 
 // Transient ---------------------------------------------------------------
