@@ -51,6 +51,16 @@ describe("canvas scene text", () => {
     expect(brief(one({ ...p, value: "" }))).toEqual([
       ["R2", "start", 26, 46, { x: 26, y: 34, width: 14, height: 15 }],
     ]);
+    const unnamed = { ...plain, labelOf: () => ({ name: "", value: "1k" }) };
+    expect(brief(one(p, unnamed))).toEqual([
+      ["1k", "start", 26, 46, { x: 26, y: 34, width: 14, height: 15 }],
+    ]);
+  });
+
+  it("uses fixed fonts: 12 px sans for parts, bold names, 12 px bold mono for labels", () => {
+    expect(NAME_FONT).toEqual({ family: "sans", weight: 600, size: 12 });
+    expect(VALUE_FONT).toEqual({ family: "sans", weight: 400, size: 12 });
+    expect(LABEL_FONT).toEqual({ family: "mono", weight: 600, size: 12 });
   });
 
   it("writes an op-amp's name then its value one line lower, below the triangle", () => {
