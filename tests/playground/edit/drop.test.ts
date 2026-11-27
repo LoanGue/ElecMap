@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { drop, landing } from "../../../docs/playground/edit/drop";
 import { move } from "../../../docs/playground/edit/moves";
-import { emptyDrawing } from "../../../docs/playground/model";
+import { emptyDrawing, onSegment } from "../../../docs/playground/model";
 import type { Drawing, Part, Wire } from "../../../docs/playground/model";
 
 const w = (x1: number, y1: number, x2: number, y2: number): Wire => ({ x1, y1, x2, y2 });
@@ -87,14 +87,36 @@ describe("playground drop", () => {
     expect(placed(drop(d, "R1", to), "R1")).toEqual({ x: 2, y: 5, dir: "right" });
   });
 
-  it("cuts a bar under its pins even across a T, leaving the stem", () => {
-    // A stem from (5, 0) down to R2 meets the bar under the dropped R1.
-    const d = drawing({
-      parts: [r("R1", 0, 20), r("R2", 5, 5, "down")],
-      wires: [w(0, 0, 10, 0), w(5, 0, 5, 5)],
+  describe("refuses to cut through a connection between the pins", () => {
+    /** A free R1 and the bar from (0, 0) to (10, 0), plus what sits on it. */
+    const bar = (d: Partial<Drawing>): Drawing =>
+      drawing({
+        ...d,
+        parts: [r("R1", 0, 20), ...(d.parts ?? [])],
+        wires: [w(0, 0, 10, 0), ...(d.wires ?? [])],
+      });
+    const cases: [string, Drawing][] = [
+      ["a T stem", bar({ parts: [r("R2", 5, 5, "down")], wires: [w(5, 0, 5, 5)] })],
+      ["a ground", bar({ grounds: [{ x: 5, y: 0 }] })],
+      ["a label", bar({ labels: [{ x: 5, y: 0, name: "out" }] })],
+      ["a user node", bar({ nodes: [{ x: 5, y: 0 }] })],
+      ["another pin", bar({ parts: [r("R2", 5, 0, "down")] })],
+    ];
+    it.each(cases)("%s", (_, d) => {
+      // R1 dropped with its pins at (3, 0) and (7, 0), around (5, 0).
+      const to = { x: 3, y: 0 };
+      expect(landing(d, "R1", to)).toBeUndefined();
+      const out = drop(d, "R1", to);
+      expect(out).toEqual(move(d, { kind: "part", id: "R1", to }));
+      // The bar is not cut: every point between the pins is still wired.
+      for (const x of [4, 5, 6])
+        expect(out.wires.some((v) => onSegment({ x, y: 0 }, v))).toBe(true);
     });
-    const out = drop(d, "R1", { x: 3, y: 0 });
-    expect(shape(out.wires)).toEqual(["0,0-3,0", "5,0-5,5", "7,0-10,0"]);
+
+    it("still inserts when the connection sits on a pin", () => {
+      const d = bar({ grounds: [{ x: 3, y: 0 }] });
+      expect(shape(drop(d, "R1", { x: 3, y: 0 }).wires)).toEqual(["0,0-3,0", "7,0-10,0"]);
+    });
   });
 
   it("brings the wires of a connected part along when it is inserted elsewhere", () => {
