@@ -13,6 +13,7 @@ import type {
 } from "../../src";
 import type { Panel, PlotOptions } from "../site/plot";
 import { bodeControls, bodePlot, frequencyRange, gainFloor, metrics, phaseTicks } from "./bode";
+import { monteCarloControls } from "./panels/monte-carlo";
 import { Editor, emptyDrawing, fromCircuit } from "./editor";
 import type { Drawing } from "./editor";
 import { EXAMPLES } from "./examples";
@@ -557,7 +558,7 @@ function transferPanel(c: ElecMap): string {
   return `${controls}
 <div class="pg-math" data-tex="${esc(latex)}"></div>${literalNote}${warnBox}
 ${metrics(H, t)}
-${bodeControls(state, t, true)}
+${bodeControls(state, t, monteCarloControls(state, t))}
 ${state.mc ? monteCarloBode(c, full, H) : bodePlot(H, state, t, figure)}`;
 }
 

@@ -16,11 +16,11 @@ export type Figure = (options: PlotOptions, units: [string, number][]) => string
 /** The frequency bounds typed by the user (blank or invalid means automatic). */
 export type FrequencyInput = Pick<State, "fStart" | "fStop">;
 
-/** The state read by the Bode controls. */
-export type ControlState = Pick<
-  State,
-  "fStart" | "fStop" | "mc" | "tolR" | "tolC" | "tolL" | "tolOther" | "runs"
->;
+/** Extra controls composed into the frequency row: an inline `toggle`, a `row` below it. */
+export interface ExtraControls {
+  toggle: string;
+  row: string;
+}
 
 /** Lowest gain plotted: 120 dB below the finite peak of `magnitudeDb`, and at most -40 dB. */
 export function gainFloor(magnitudeDb: readonly number[]): number {
@@ -131,24 +131,15 @@ export function metrics(H: TransferFunction, t: Strings): string {
 </div>`;
 }
 
-/** Frequency bounds, plus the Monte-Carlo toggle and tolerances when `tolerance` is set. */
-export function bodeControls(state: ControlState, t: Strings, tolerance = false): string {
-  const pct = (key: "tolR" | "tolC" | "tolL", label: string) =>
-    `<label>${label} ±<input data-bind="${key}" value="${esc(state[key])}" size="3"> %</label>`;
-  const toggle = tolerance
-    ? `<button data-mc class="pg-toggle${state.mc ? " on" : ""}" title="${esc(t.mcHint)}">± ${t.mcEnvelope}</button>`
-    : "";
-  const mcRow =
-    tolerance && state.mc
-      ? `<div class="pg-controls pg-small pg-mc">
-  ${pct("tolR", "R")}${pct("tolC", "C")}${pct("tolL", "L")}
-  <label>${t.tolOther}<input data-bind="tolOther" value="${esc(state.tolOther)}" placeholder="${esc(t.tolOtherHint)}" size="14"></label>
-  <label><input data-bind="runs" value="${esc(state.runs)}" size="4"> ${t.runsLabel}</label>
-</div>`
-      : "";
+/** Frequency bounds, with the `extra` toggle in their row and its row below. */
+export function bodeControls(
+  state: FrequencyInput,
+  t: Strings,
+  extra: ExtraControls = { toggle: "", row: "" },
+): string {
   return `<div class="pg-controls pg-small">
   <label>${t.from}<input data-bind="fStart" placeholder="${t.auto}" value="${esc(state.fStart)}" size="7"> Hz</label>
   <label>${t.to}<input data-bind="fStop" placeholder="${t.auto}" value="${esc(state.fStop)}" size="7"> Hz</label>
-  ${toggle}
-</div>${mcRow}`;
+  ${extra.toggle}
+</div>${extra.row}`;
 }

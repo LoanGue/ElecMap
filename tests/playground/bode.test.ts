@@ -90,15 +90,13 @@ describe("playground bode", () => {
     expect(html).toContain(`<dt>${t.bandwidth}</dt><dd>159.2 Hz</dd>`);
   });
 
-  it("shows the Monte-Carlo controls only with tolerances on", () => {
+  it("puts the extra toggle in the frequency row and its row below", () => {
     const s = defaultState(EXAMPLES[0] as (typeof EXAMPLES)[0]);
-    expect(bodeControls(s, t)).not.toContain("data-mc");
-    expect(bodeControls({ ...s, mc: false }, t, true)).not.toContain('data-bind="tolR"');
-    const on = bodeControls({ ...s, mc: true, fStart: "<1>" }, t, true);
-    expect(on).toContain('data-bind="tolR"');
-    expect(on).toContain('class="pg-toggle on"');
-    expect(bodeControls({ ...s, mc: false }, t, true)).toContain('class="pg-toggle"');
-    expect(on).toContain('value="&lt;1&gt;"');
+    const plain = bodeControls({ ...s, fStart: "<1>" }, t);
+    expect(plain).toContain('value="&lt;1&gt;"');
+    expect(plain.endsWith("Hz</label>\n  \n</div>")).toBe(true);
+    const html = bodeControls(s, t, { toggle: "<b>T</b>", row: "<p>R</p>" });
+    expect(html).toMatch(/Hz<\/label>\n {2}<b>T<\/b>\n<\/div><p>R<\/p>$/);
   });
 
   it("floors the gain 120 dB below a finite peak, at -40 dB at most", () => {
